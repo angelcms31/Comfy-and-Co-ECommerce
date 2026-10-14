@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+
+  --color-forest: #1f4d40;
+  --color-forest-dark: #163a30;
+  --color-forest-light: #2d6b59;
+  --color-cream: #f7f0e6;
+  --color-mint: #bfe3d0;
+  --color-mint-light: #d4ede1;
+  --color-butter: #f8e6be;
+  --color-butter-light: #fbf1d8;
+  --color-coral: #ff9f84;
+  --color-coral-dark: #c4502f;
+  --color-ink: #1d2b26;
+  --color-muted: #5c6b65;
+  --color-line: #e6ddd0;
+
+  --color-pending: #fbe7b0;
+  --color-pending-text: #7a5300;
+  --color-cancelled: #fcd2c5;
+  --color-cancelled-text: #a33a1f;
+
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px rgb(29 43 38 / 0.06), 0 4px 14px rgb(29 43 38 / 0.06);
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-cream font-sans text-ink antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-forest;
+  }
+}
+
+@utility checker-butter {
+  background-color: var(--color-butter-light);
+  background-image: conic-gradient(var(--color-butter) 25%, transparent 0 50%, var(--color-butter) 0 75%, transparent 0);
+  background-size: 56px 56px;
+}
+
+@utility checker-mint {
+  background-color: var(--color-mint-light);
+  background-image: conic-gradient(var(--color-mint) 25%, transparent 0 50%, var(--color-mint) 0 75%, transparent 0);
+  background-size: 56px 56px;
+}
+
+@utility container-page {
+  @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+}
