@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { MessageSquareText } from 'lucide-react';
 import { useAsync } from '@/hooks/useAsync';
 import Button from '@/components/ui/Button';
@@ -12,14 +13,26 @@ const PAGE = 4;
 export default function ProductReviews({ productId }: { productId: number }) {
   const { data, loading, error, reload } = useAsync(() => reviewService.getForProduct(productId), [productId]);
   const [shown, setShown] = useState(PAGE);
+  const section = useRef<HTMLElement>(null);
+  const { hash } = useLocation();
+
+  // "Write Review" on Track Order links here with #reviews
+  useEffect(() => {
+    if (hash === '#reviews') section.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [hash, loading]);
 
   return (
-    <section aria-labelledby="reviews-title" className="rounded-card border border-ink/15 bg-butter-light p-5 sm:p-8">
+    <section
+      ref={section}
+      id="reviews"
+      aria-labelledby="reviews-title"
+      className="scroll-mt-32 rounded-card border border-ink/15 bg-butter-light p-5 sm:p-8"
+    >
       <h2 id="reviews-title" className="mb-6 text-2xl font-semibold text-forest">
         ratings &amp; reviews
       </h2>
 
-      {loading && <LoadingState label="Loading reviews..." />}
+      {loading && <LoadingState label="Loading reviews..." layout="list" />}
       {error && <ErrorState message={error} onRetry={reload} />}
       {data && data.reviews.length === 0 && (
         <EmptyState icon={<MessageSquareText className="size-7" />} title="No reviews yet" message="Be the first to review this after your order arrives." />
