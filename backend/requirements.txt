@@ -1,5 +1,6 @@
 email-validator==2.3.0
 fastapi==0.143.0
+pillow==13.0.0
 psycopg-binary==3.3.6
 psycopg-pool==3.3.3
 psycopg==3.3.6
