@@ -11,6 +11,7 @@ import { categoryService } from '@/services/categoryService';
 import { firstImage, parseImages } from '@/lib/images';
 import { displayVariant, tileColor } from '@/lib/product';
 import { cn } from '@/lib/cn';
+import { formatPeso, getEffectivePrice } from '@/lib/pricing';
 import type { Collection, ProductWithVariants } from '@/types/models';
 
 type ProductsState = { data: ProductWithVariants[] | null; loading: boolean };
@@ -51,17 +52,33 @@ function Carousel({ products }: { products: ProductsState }) {
   // the list is drawn twice so the loop has no gap, the copy is hidden from screen readers
   const row = (copy: boolean) => (
     <div className="flex gap-3 pr-3" aria-hidden={copy}>
-      {tiles.map((p, i) => (
-        <Link
-          key={p.product_id}
-          to={`/products/${p.product_id}`}
-          tabIndex={copy ? -1 : undefined}
-          title={p.product_name}
-          className={cn(TILE, 'overflow-hidden p-3 transition-transform hover:-translate-y-1', tileColor(i))}
-        >
-          <img src={firstImage(displayVariant(p)?.images)} alt={copy ? '' : p.product_name} className="size-full object-contain" />
-        </Link>
-      ))}
+      {tiles.map((p, i) => {
+        const variant = displayVariant(p)!;
+        const { price, original } = getEffectivePrice(variant);
+        return (
+          <Link
+            key={p.product_id}
+            to={`/products/${p.product_id}`}
+            tabIndex={copy ? -1 : undefined}
+            className={cn(TILE, 'group relative overflow-hidden p-3 transition-transform hover:-translate-y-1', tileColor(i))}
+          >
+            <img
+              src={firstImage(variant.images)}
+              alt={copy ? '' : p.product_name}
+              className="size-full object-contain transition-transform duration-300 group-hover:scale-105"
+            />
+            {/* details slide up when the mouse is over the tile (or it has keyboard focus) */}
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-forest-dark/95 via-forest-dark/80 to-transparent px-3 pb-3 pt-8 text-left text-white opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
+              <span className="block truncate text-[10px] uppercase tracking-wide text-white/75">{p.category.item_category}</span>
+              <span className="line-clamp-2 text-sm font-semibold leading-tight">{p.product_name}</span>
+              <span className="mt-1 flex items-baseline gap-1.5 text-sm font-semibold">
+                {formatPeso(price)}
+                {original != null && <span className="text-[11px] font-normal text-white/70 line-through">{formatPeso(original)}</span>}
+              </span>
+            </span>
+          </Link>
+        );
+      })}
     </div>
   );
 
