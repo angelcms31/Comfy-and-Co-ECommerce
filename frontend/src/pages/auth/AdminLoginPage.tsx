@@ -5,6 +5,7 @@ import PasswordInput from '@/components/ui/PasswordInput';
 import { LogoMark } from '@/components/layout/Logo';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/cn';
+import { isAdmin } from '@/lib/roles';
 import { useLoginForm } from './useLoginForm';
 
 export default function AdminLoginPage() {
@@ -16,7 +17,7 @@ export default function AdminLoginPage() {
 
   const { email, setEmail, password, setPassword, remember, setRemember, locked, loading, hasError, errorText, onSubmit } = useLoginForm(
     async (session) => {
-      if (session.user.role !== 'admin') {
+      if (!isAdmin(session.user)) {
         await logout();
         return "This account doesn't have admin access.";
       }
@@ -25,7 +26,7 @@ export default function AdminLoginPage() {
     },
   );
 
-  if (user?.role === 'admin') return <Navigate to={target} replace />;
+  if (isAdmin(user)) return <Navigate to={target} replace />;
 
   return (
     <div className="grid min-h-screen bg-cream md:grid-cols-2">

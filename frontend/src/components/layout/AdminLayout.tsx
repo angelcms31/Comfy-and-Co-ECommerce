@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, Menu, Package, ShoppingCart, Star, Store, X } from 'lucide-react';
+import { LayoutDashboard, Menu, Package, Settings, ShoppingCart, Star, Store, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useAsync } from '@/hooks/useAsync';
+import { adminService } from '@/services/adminService';
 import { cn } from '@/lib/cn';
+import { isSuperAdmin, ROLE_LABEL } from '@/lib/roles';
 import BottomNav, { BOTTOM_NAV_SPACE, BottomTab } from './BottomNav';
 import Logo from './Logo';
 
@@ -12,26 +15,40 @@ const links = [
   { to: '/admin/orders', label: 'Orders', icon: ShoppingCart },
   { to: '/admin/reviews', label: 'Reviews', icon: Star },
 ];
+const settingsLink = { to: '/admin/settings', label: 'Settings', icon: Settings };
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+// Settings > Security: log the admin out after this many minutes without clicks or typing
+function useInactivityLogout(minutes: number | undefined, onTimeout: () => void) {
+  useEffect(() => {
+    if (!minutes) return;
+    let timer = window.setTimeout(onTimeout, minutes * 60000);
+    const reset = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(onTimeout, minutes * 60000);
+    };
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'] as const;
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [minutes, onTimeout]);
+}
 
-  const onLogout = async () => {
-    await logout();
-    navigate('/admin/login', { replace: true });
-  };
+function Sidebar({ onNavigate, onLogout }: { onNavigate?: () => void; onLogout: () => void }) {
+  const { user } = useAuth();
+  const nav = isSuperAdmin(user) ? [...links, settingsLink] : links;
 
   return (
     <div className="flex h-full flex-col bg-forest px-4 py-6 text-white">
       <Logo to="/admin" showText className="px-2" />
 
       <nav className="mt-8 flex flex-1 flex-col gap-1">
-        {links.map(({ to, label, icon: Icon, end }) => (
+        {nav.map(({ to, label, icon: Icon, ...rest }) => (
           <NavLink
             key={to}
             to={to}
-            end={end}
+            end={'end' in rest}
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
@@ -53,16 +70,20 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       <div className="flex items-center gap-3 rounded-xl bg-white/10 p-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-full bg-mint font-display font-semibold text-forest">
-          {user?.full_name.charAt(0).toUpperCase()}
+          {user?.full_name
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((w) => w.charAt(0).toUpperCase())
+            .join('')}
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{user?.full_name}</p>
-          <p className="text-xs text-white/60">Store admin</p>
+          <p className="text-xs text-white/60">{user && ROLE_LABEL[user.role]}</p>
         </div>
-        <button onClick={onLogout} className="rounded-lg p-1.5 text-white/70 hover:bg-white/10 hover:text-white" aria-label="Log out" title="Log out">
-          <LogOut className="size-4" />
-        </button>
       </div>
+      <button onClick={onLogout} className="mt-3 text-center text-sm text-white/80 underline-offset-2 hover:text-white hover:underline">
+        Sign out
+      </button>
     </div>
   );
 }
@@ -70,11 +91,26 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 export default function AdminLayout() {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const settings = useAsync(() => adminService.getSettings(), []);
+
+  const onLogout = useCallback(
+    async (notice?: string) => {
+      await logout();
+      navigate('/admin/login', { replace: true, state: notice ? { notice } : undefined });
+    },
+    [logout, navigate],
+  );
+  const onTimeout = useCallback(() => onLogout('You were logged out after being inactive. Please log in again.'), [onLogout]);
+  useInactivityLogout(settings.data?.security.inactivity_minutes, onTimeout);
+
+  const tabs = isSuperAdmin(user) ? [...links.slice(0, 3), settingsLink] : links;
 
   return (
     <div className={cn('min-h-screen bg-cream lg:grid lg:grid-cols-[240px_1fr]', BOTTOM_NAV_SPACE)}>
       <aside className="sticky top-0 hidden h-screen lg:block">
-        <Sidebar />
+        <Sidebar onLogout={() => onLogout()} />
       </aside>
 
       {/* phone + tablet: title on top, tabs at the bottom, Menu opens the sidebar */}
@@ -83,13 +119,13 @@ export default function AdminLayout() {
         <span className="font-display text-lg font-semibold">comfy&amp;co admin</span>
       </div>
       <BottomNav label="Admin">
-        {links.map(({ to, label, icon: Icon, end }) => (
+        {tabs.map(({ to, label, icon: Icon, ...rest }) => (
           <BottomTab
             key={to}
             to={to}
             label={label}
             icon={<Icon className="size-6" />}
-            active={!open && (end ? pathname === to : pathname.startsWith(to))}
+            active={!open && ('end' in rest ? pathname === to : pathname.startsWith(to))}
           />
         ))}
         <BottomTab label="Menu" icon={<Menu className="size-6" />} active={open} onClick={() => setOpen((o) => !o)} />
@@ -98,7 +134,7 @@ export default function AdminLayout() {
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-ink/40" onClick={() => setOpen(false)} />
           <div className="relative h-full w-64">
-            <Sidebar onNavigate={() => setOpen(false)} />
+            <Sidebar onNavigate={() => setOpen(false)} onLogout={() => onLogout()} />
             <button onClick={() => setOpen(false)} className="absolute right-3 top-6 text-white" aria-label="Close menu">
               <X className="size-5" />
             </button>

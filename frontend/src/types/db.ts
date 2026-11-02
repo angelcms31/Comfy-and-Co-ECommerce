@@ -1,7 +1,7 @@
 // Table types, same field names as the ERD.
 // Fields starting with _temp_ are not in the ERD yet (see SCHEMA_GAPS.md).
 
-export type UserRoleName = 'customer' | 'admin';
+export type UserRoleName = 'customer' | 'admin' | 'super_admin';
 
 export interface UserRole {
   user_role_id: number;
@@ -47,6 +47,7 @@ export interface Product {
   product_name: string;
   prod_desc: string;
   is_avail: boolean;
+  _temp_subcategory?: string | null; // e.g. "Sofa & Couches", from backend/supabase/products.json (SCHEMA_GAPS #16)
 }
 
 export interface ProdVar {

@@ -1,6 +1,6 @@
 import { http } from '@/lib/http';
-import type { DashboardSummary } from '@/types/models';
+import type { DashboardSummary, SalesRange } from '@/types/admin';
 
 export const dashboardService = {
-  getSummary: () => http<DashboardSummary>('/admin/dashboard'),
+  getSummary: (range: SalesRange = '7d') => http<DashboardSummary>('/admin/dashboard', { params: { range } }),
 };

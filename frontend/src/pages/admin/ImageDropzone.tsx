@@ -1,5 +1,6 @@
 import { useRef, useState, type DragEvent } from 'react';
-import { Loader2, Upload, X } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
+import LoadingDots from '@/components/ui/LoadingDots';
 import { useToast } from '@/components/ui/Toast';
 import { uploadService } from '@/services/uploadService';
 import { cn } from '@/lib/cn';
@@ -69,7 +70,7 @@ export default function ImageDropzone({ images, onChange }: Props) {
           dragging ? 'border-forest bg-mint-light' : 'border-line bg-cream hover:border-forest',
         )}
       >
-        {uploading > 0 ? <Loader2 className="size-5 animate-spin text-forest" /> : <Upload className="size-5 text-forest" />}
+        {uploading > 0 ? <LoadingDots size="sm" className="text-forest" /> : <Upload className="size-5 text-forest" />}
         <span>{uploading > 0 ? 'Uploading...' : 'Drag & drop product photos or browse files'}</span>
         <span className="text-[11px]">JPG, PNG or WEBP, up to {MAX_MB} MB</span>
         <input
