@@ -6,6 +6,8 @@ export const orderService = {
   place: (input: PlaceOrderInput) => http<OrderWithItems>('/orders', { method: 'POST', body: input }),
   getMine: () => http<OrderWithItems[]>('/orders/me'),
   getById: (orderId: number) => http<OrderWithItems>(`/orders/${orderId}`),
+  cancel: (orderId: number, reason: string) => http<OrderWithItems>(`/orders/${orderId}/cancel`, { method: 'POST', body: { reason } }),
+  markReceived: (orderId: number) => http<OrderWithItems>(`/orders/${orderId}/received`, { method: 'POST' }),
   confirmGcash: (orderId: number) => http<OrderWithItems>(`/orders/${orderId}/gcash/confirm`, { method: 'POST' }),
 
   // admin

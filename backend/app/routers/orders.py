@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from .. import queries
 from ..config import COURIERS, DELIVERY_FEE
 from ..db import Db
-from ..deps import current_user
+from ..deps import ADMIN_ROLES, current_user
 from ..pricing import effective_price
-from ..schemas import PlaceOrderIn
+from ..schemas import CancelOrderIn, PlaceOrderIn
 from .users import update_profile
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -111,7 +111,7 @@ def my_orders(db: Db, user=Depends(current_user)):
 
 def own_order(db, user: dict, order_id: int) -> dict:
     order = queries.order_or_404(db, order_id)
-    if order["user_id"] != user["user_id"] and user["role"] != "admin":
+    if order["user_id"] != user["user_id"] and user["role"] not in ADMIN_ROLES:
         raise HTTPException(404, "Order not found")
     return order
 
@@ -119,6 +119,35 @@ def own_order(db, user: dict, order_id: int) -> dict:
 @router.get("/{order_id}")
 def get_order(db: Db, order_id: int, user=Depends(current_user)):
     return own_order(db, user, order_id)
+
+
+@router.post("/{order_id}/cancel")
+def cancel_order(db: Db, order_id: int, body: CancelOrderIn, user=Depends(current_user)):
+    order = own_order(db, user, order_id)
+    if order["order_stat"] != "Pending":
+        raise HTTPException(400, "Only orders that haven't shipped yet can be cancelled")
+    db.execute(
+        """
+        update prod_var v set stocks = v.stocks + oi.quantity
+        from order_item oi where oi.prod_var_id = v.prod_var_id and oi.order_id = %s
+        """,
+        (order_id,),
+    )
+    # no column for the reason (SCHEMA_GAPS #20), so it's added to the end of shipping_add
+    db.execute(
+        """update "order" set order_stat = 'Cancelled', shipping_add = shipping_add || %s where order_id = %s""",
+        (f" [Cancelled by buyer: {body.reason.strip()}]", order_id),
+    )
+    return queries.order_or_404(db, order_id)
+
+
+@router.post("/{order_id}/received")
+def mark_received(db: Db, order_id: int, user=Depends(current_user)):
+    order = own_order(db, user, order_id)
+    if order["order_stat"] != "Shipped":
+        raise HTTPException(400, "Only orders that are on the way can be marked as received")
+    db.execute("""update "order" set order_stat = 'Delivered' where order_id = %s""", (order_id,))
+    return queries.order_or_404(db, order_id)
 
 
 @router.post("/{order_id}/gcash/confirm")

@@ -34,8 +34,15 @@ export type CartLine = Omit<CartItem, 'cart_item_id' | 'cart_id'> & {
 
 export type WishlistLine = WishlistItem & { variant: VariantWithProduct };
 
+// the backend adds these from the variant, they're null if the product was deleted
+export type OrderLine = OrderItem & {
+  product_id: number | null;
+  color: string | null;
+  images: string | string[] | null;
+};
+
 export type OrderWithItems = Order & {
-  items: OrderItem[];
+  items: OrderLine[];
   customer_name: string;
 };
 
@@ -69,13 +76,4 @@ export interface RegisterInput {
   password: string;
   mobile_no?: string;
   birthdate?: string;
-}
-
-export interface DashboardSummary {
-  salesToday: number;
-  ordersToday: number;
-  pendingOrders: number;
-  lowStockCount: number;
-  last7Days: { day: string; total: number }[];
-  recentOrders: OrderWithItems[];
 }
