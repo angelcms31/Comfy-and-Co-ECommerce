@@ -25,5 +25,9 @@ export const productService = {
   update: (productId: number, input: ProductInput) =>
     http<ProductWithVariants>(`/admin/products/${productId}`, { method: 'PUT', body: input }),
 
+  // archived products are hidden from the store but kept for old orders
+  archive: (productId: number, archived: boolean) =>
+    http<ProductWithVariants>(`/admin/products/${productId}/archive`, { method: 'PATCH', body: { archived } }),
+
   remove: (productId: number) => http<void>(`/admin/products/${productId}`, { method: 'DELETE' }),
 };

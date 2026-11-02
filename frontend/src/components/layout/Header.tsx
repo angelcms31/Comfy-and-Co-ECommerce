@@ -8,8 +8,16 @@ import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { COLLECTIONS } from '@/lib/constants';
 import { cn } from '@/lib/cn';
+import { isAdmin } from '@/lib/roles';
 import BottomNav, { BottomTab } from './BottomNav';
 import Logo from './Logo';
+
+// Track Order only shows when logged in
+const pageLinks = (loggedIn: boolean) => [
+  { to: '/about', label: 'About Us' },
+  { to: '/contact', label: 'Contact Us' },
+  ...(loggedIn ? [{ to: '/orders', label: 'Track Order' }] : []),
+];
 
 function SearchBar({ className }: { className?: string }) {
   const navigate = useNavigate();
@@ -74,7 +82,7 @@ function AccountMenu() {
             <p className="truncate font-medium">{user.full_name}</p>
             <p className="truncate text-xs text-muted">{user.email}</p>
           </div>
-          {user.role === 'admin' && (
+          {isAdmin(user) && (
             <Link to="/admin" onClick={close} className={item}>
               Admin dashboard
             </Link>
@@ -83,7 +91,7 @@ function AccountMenu() {
             My profile
           </Link>
           <Link to="/orders" onClick={close} className={item}>
-            My orders
+            Track orders
           </Link>
           <Link to="/wishlist" onClick={close} className={item}>
             My wishlist
@@ -201,9 +209,11 @@ export default function Header() {
             ))
           }
         </Dropdown>
-        <NavLink to="/about" className="rounded-full px-2 py-1 hover:bg-white/10">
-          About us
-        </NavLink>
+        {pageLinks(!!user).map((l) => (
+          <NavLink key={l.to} to={l.to} className={({ isActive }) => cn('rounded-full px-2 py-1 hover:bg-white/10', isActive && 'bg-white/10')}>
+            {l.label}
+          </NavLink>
+        ))}
       </nav>
 
       {/* opened by the Menu tab: a panel that slides up above the tab bar */}
@@ -240,9 +250,13 @@ export default function Header() {
                 ))}
               </div>
             </div>
-            <Link to="/about" className="rounded-lg px-2 py-1.5 hover:bg-white/10">
-              About us
-            </Link>
+            <div className="grid grid-cols-2 gap-1">
+              {pageLinks(!!user).map((l) => (
+                <Link key={l.to} to={l.to} className="rounded-lg px-2 py-1.5 hover:bg-white/10">
+                  {l.label}
+                </Link>
+              ))}
+            </div>
             {!user && (
               <div className="grid grid-cols-2 gap-2 border-t border-white/10 pt-4">
                 <Link to="/login" className="rounded-full bg-mint py-2 text-center font-medium text-forest">

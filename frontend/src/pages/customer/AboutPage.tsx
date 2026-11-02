@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ButtonLink } from '@/components/ui/Button';
 import { useAsync } from '@/hooks/useAsync';
@@ -9,13 +9,21 @@ import type { ProductWithVariants } from '@/types/models';
 
 const photo = (p?: ProductWithVariants) => (p ? firstImage(displayVariant(p)?.images) : '/images/placeholder.svg');
 
-function Story({ title, image, flip, children }: { title: string; image: string; flip?: boolean; children: ReactNode }) {
+// image: the cut-out picture in public/images/about/, fallback: a product photo used until that file is added
+function Story({ title, image, fallback, flip, children }: { title: string; image: string; fallback: string; flip?: boolean; children: ReactNode }) {
+  const [missing, setMissing] = useState(false);
   return (
-    <div className="grid items-center gap-6 sm:grid-cols-2 sm:gap-10">
-      <img src={image} alt="" className={`mx-auto h-56 w-full object-contain sm:h-72 ${flip ? '' : 'sm:order-2'}`} />
+    <div className="grid items-center gap-6 sm:grid-cols-2 sm:gap-12">
+      <img
+        src={missing ? fallback : image}
+        alt=""
+        onError={() => setMissing(true)}
+        // product photos have a white background, multiply blends it into the butter
+        className={`mx-auto h-56 w-full object-contain sm:h-72 ${missing ? 'mix-blend-multiply' : ''} ${flip ? '' : 'sm:order-2'}`}
+      />
       <div>
-        <h2 className="text-2xl font-semibold leading-tight text-forest sm:text-3xl">{title}</h2>
-        <p className="mt-3 text-sm leading-relaxed text-ink sm:text-base">{children}</p>
+        <h2 className="text-2xl font-semibold leading-tight text-forest sm:text-[1.7rem]">{title}</h2>
+        <p className="mt-3 text-justify text-sm leading-relaxed text-ink sm:text-base">{children}</p>
       </div>
     </div>
   );
@@ -43,27 +51,46 @@ export default function AboutPage() {
   const withPhoto = (products.data ?? []).filter((p) => parseImages(displayVariant(p)?.images).length > 0);
   const firstOfEach = withPhoto.filter((p, i) => withPhoto.findIndex((x) => x.item_categ_id === p.item_categ_id) === i);
   const windows = [...firstOfEach, ...withPhoto.filter((p) => !firstOfEach.includes(p))].slice(0, 8);
+  // story pictures until the plant/sofa files are added: dark wood pieces, since white or beige ones blend into the butter background
+  const dark = withPhoto.filter((p) => /brown|black/i.test(displayVariant(p)?.prod_attr ?? ''));
+  const storyPhoto = (productId: number, n: number) => photo(withPhoto.find((p) => p.product_id === productId) ?? dark[n]);
 
   return (
     <>
-      <section className="checker-butter pb-16 pt-14 sm:pb-24">
-        <div className="container-page max-w-4xl">
+      <section className="relative overflow-hidden bg-butter pb-16 pt-14 sm:pb-24">
+        {/* soft light swoosh behind the stories */}
+        <svg className="pointer-events-none absolute inset-0 size-full" viewBox="0 0 1000 800" preserveAspectRatio="none" aria-hidden>
+          <path
+            d="M-50 330 C 150 180, 260 420, 330 560 S 470 760, 560 610 S 760 300, 1050 520"
+            fill="none"
+            stroke="var(--color-butter-light)"
+            strokeWidth="120"
+            strokeLinecap="round"
+          />
+        </svg>
+
+        <div className="container-page relative max-w-4xl">
           <div className="text-center">
             <h1 className="text-5xl font-semibold text-forest sm:text-7xl">
               about comfy<span className="text-bark">&amp;</span>co
             </h1>
-            <p className="mt-3 font-display text-lg italic text-forest/80">"Making every corner feel like home"</p>
+            <p className="mt-2 text-sm font-medium text-amber sm:text-base">"Making every corner feel like home"</p>
           </div>
 
-          <div className="mt-12 space-y-10 rounded-3xl bg-cream/80 p-6 sm:space-y-6 sm:p-10">
-            <Story title="Born in Manila, made for real living spaces" image={photo(firstOfEach[1] ?? withPhoto[0])}>
-              Comfy&amp;Co started in Manila to solve a problem of finding furniture that fits personality. Through standard sizes and
-              practical designs, we want to make every corner comfortable, from the first condo to the family home. We pick durable
-              finishes and pieces that are easy to live with, at prices that make sense.
+          <div className="mt-10 space-y-12 sm:space-y-8">
+            <Story title="Born in Manila, made for real living spaces" image="/images/about/plant.png" fallback={storyPhoto(24, 0)}>
+              Comfy &amp; Co. started in Manila to solve a problem of finding furniture that has personality, fits through standard doors,
+              and does not require a massive budget. We aim to go against offering cold, plain boards or vintage tables that crowded small
+              rooms. We want to combine warm, curved shapes with practical, space-smart designs.
             </Story>
-            <Story title="Proportioned for condos, rooms, and first-time setups" image={photo(firstOfEach[0] ?? withPhoto[1])} flip>
-              We design our products around compact rooms, hybrid workspaces and first-time movers who want their homes to feel warm
-              without feeling cluttered. Every item lists its exact size, so there are no delivery-day surprises at the doorstep.
+            <Story
+              title="Proportioned for condos, renters, and first-time setups"
+              image="/images/about/sofa.png"
+              fallback={storyPhoto(16, 1)}
+              flip
+            >
+              We design our products around renters, hybrid workers, and first-time movers who want their home to feel warm without
+              feeling cluttered. Every item lists exact dimensions so there are no delivery-day surprises at the doorway.
             </Story>
           </div>
         </div>
@@ -77,7 +104,7 @@ export default function AboutPage() {
           {/* roof */}
           <div className="mx-auto w-[94%] bg-coral px-6 pb-6 pt-8 text-center text-white [clip-path:polygon(5%_0,95%_0,100%_100%,0_100%)]">
             <h2 className="text-4xl font-semibold sm:text-5xl">what we offer</h2>
-            <p className="mt-1 text-sm text-white/90">Find the ones to make your home or studio</p>
+            <p className="mt-1 text-sm text-white/90">Built for every room in your home or studio</p>
           </div>
           <div className="h-3 bg-coral-dark/70" />
 
@@ -86,7 +113,7 @@ export default function AboutPage() {
             {products.loading ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6">
                 {Array.from({ length: 4 }, (_, i) => (
-                  <div key={i} className="aspect-square animate-pulse rounded-md border-[6px] border-white bg-butter-light" />
+                  <div key={i} className="aspect-square skeleton rounded-md border-[6px] border-white" />
                 ))}
               </div>
             ) : (

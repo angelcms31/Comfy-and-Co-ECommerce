@@ -10,11 +10,11 @@ interface ProductGridProps {
   onRetry?: () => void;
   skeletons?: number;
   empty?: ReactNode;
+  list?: boolean; // one product per row instead of the grid
 }
 
-const grid = 'grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3';
-
-export default function ProductGrid({ products, loading, error, onRetry, skeletons = 6, empty }: ProductGridProps) {
+export default function ProductGrid({ products, loading, error, onRetry, skeletons = 6, empty, list }: ProductGridProps) {
+  const grid = list ? 'grid gap-3 sm:gap-4' : 'grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3';
   if (loading) {
     return (
       <div className={grid} aria-busy="true">
@@ -30,7 +30,7 @@ export default function ProductGrid({ products, loading, error, onRetry, skeleto
   return (
     <div className={grid}>
       {products.map((p, i) => (
-        <ProductCard key={p.product_id} product={p} index={i} />
+        <ProductCard key={p.product_id} product={p} index={i} row={list} />
       ))}
     </div>
   );

@@ -1,11 +1,16 @@
 import { Link } from 'react-router-dom';
+import { MapPin } from 'lucide-react';
 import { COURIERS } from '@/lib/constants';
+import { useStoreInfo } from '@/hooks/useStoreInfo';
+import SocialIcons from '@/components/ui/SocialIcons';
+import { useAuth } from '@/context/AuthContext';
 import { LogoMark } from './Logo';
 
 const explore = [
   { to: '/about', label: 'About us' },
-  { to: '/profile', label: 'My profile' },
+  { to: '/orders', label: 'Track order' },
   { to: '/wishlist', label: 'My wishlist' },
+  { to: '/contact', label: 'Contact us' },
   { to: '/terms', label: 'Terms & Conditions' },
   { to: '/privacy', label: 'Privacy Policy' },
 ];
@@ -13,6 +18,8 @@ const explore = [
 const badge = 'rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-forest';
 
 export default function Footer() {
+  const { user } = useAuth(); // Track order only shows when logged in
+  const store = useStoreInfo();
   return (
     <footer className="bg-forest text-white">
       <div className="container-page grid gap-10 py-12 sm:grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr] md:gap-16">
@@ -20,12 +27,17 @@ export default function Footer() {
           <LogoMark className="size-14" />
           <span className="mt-2 font-display text-4xl font-semibold">comfy&amp;co</span>
           <p className="mt-2 max-w-48 text-sm text-white/90">"Making every corner feel like home."</p>
+          <p className="mt-4 flex max-w-64 items-start gap-1.5 text-left text-xs text-white/70">
+            <MapPin className="mt-px size-3.5 shrink-0" />
+            {store.address}
+          </p>
+          <SocialIcons className="mt-4" />
         </div>
 
         <div className="text-center sm:text-left">
           <h3 className="mb-3 font-sans text-sm font-semibold">Explore</h3>
           <ul className="space-y-2 text-sm text-white/80">
-            {explore.map((l) => (
+            {explore.filter((l) => user || l.to !== '/orders').map((l) => (
               <li key={l.to}>
                 <Link to={l.to} className="hover:text-white">
                   {l.label}
