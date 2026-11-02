@@ -14,9 +14,9 @@ export default function ProductReviews({ productId }: { productId: number }) {
   const [shown, setShown] = useState(PAGE);
 
   return (
-    <section aria-labelledby="reviews-title" className="rounded-card bg-white/70 p-5 sm:p-8">
+    <section aria-labelledby="reviews-title" className="rounded-card border border-ink/15 bg-butter-light p-5 sm:p-8">
       <h2 id="reviews-title" className="mb-6 text-2xl font-semibold text-forest">
-        Ratings &amp; reviews
+        ratings &amp; reviews
       </h2>
 
       {loading && <LoadingState label="Loading reviews..." />}
@@ -32,9 +32,11 @@ export default function ProductReviews({ productId }: { productId: number }) {
               <ReviewCard key={r.review_id} review={r} />
             ))}
             {shown < data.reviews.length && (
-              <Button variant="outline" size="sm" onClick={() => setShown((n) => n + PAGE)}>
-                Show more reviews
-              </Button>
+              <div className="flex justify-center">
+                <Button variant="outline" size="sm" onClick={() => setShown((n) => n + PAGE)}>
+                  See all reviews
+                </Button>
+              </div>
             )}
           </div>
         </div>

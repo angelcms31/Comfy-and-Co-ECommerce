@@ -5,13 +5,22 @@ import { WishlistProvider } from '@/context/WishlistContext';
 import CustomerLayout from '@/components/layout/CustomerLayout';
 import AdminLayout from '@/components/layout/AdminLayout';
 import RequireAdmin from '@/components/layout/RequireAdmin';
+import RequireLogin from '@/components/layout/RequireLogin';
 import AdminLoginPage from '@/pages/auth/AdminLoginPage';
+import LoginPage from '@/pages/auth/LoginPage';
+import RegisterPage from '@/pages/auth/RegisterPage';
+import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
 import DashboardPage from '@/pages/admin/DashboardPage';
 import InventoryPage from '@/pages/admin/InventoryPage';
 import HomePage from '@/pages/customer/HomePage';
 import ProductListPage from '@/pages/customer/ProductListPage';
 import ProductDetailsPage from '@/pages/customer/ProductDetailsPage';
 import WishlistPage from '@/pages/customer/WishlistPage';
+import CartPage from '@/pages/customer/CartPage';
+import CheckoutPage from '@/pages/customer/CheckoutPage';
+import OrderConfirmationPage from '@/pages/customer/OrderConfirmationPage';
+import ProfilePage from '@/pages/customer/account/ProfilePage';
+import ShippingPage from '@/pages/customer/account/ShippingPage';
 import AboutPage from '@/pages/customer/AboutPage';
 import PolicyPage from '@/pages/customer/PolicyPage';
 import Placeholder from '@/pages/Placeholder';
@@ -45,15 +54,17 @@ export const router = createBrowserRouter([
           { path: '/terms', element: <PolicyPage page="terms" /> },
           { path: '/privacy', element: <PolicyPage page="privacy" /> },
 
-          { path: '/cart', element: <Placeholder title="Cart" phase={3} /> },
-          { path: '/checkout', element: <Placeholder title="Checkout" phase={3} /> },
+          { path: '/cart', element: <CartPage /> },
+          { path: '/checkout', element: <RequireLogin><CheckoutPage /></RequireLogin> },
+          { path: '/checkout/shipping', element: <RequireLogin><ShippingPage /></RequireLogin> },
+          { path: '/profile', element: <RequireLogin><ProfilePage /></RequireLogin> },
           { path: '/checkout/gcash/:orderId', element: <Placeholder title="GCash payment" phase={3} /> },
           { path: '/orders', element: <Placeholder title="My orders" phase={3} /> },
-          { path: '/orders/:orderId', element: <Placeholder title="Order confirmation" phase={3} /> },
+          { path: '/orders/:orderId', element: <RequireLogin><OrderConfirmationPage /></RequireLogin> },
 
-          { path: '/login', element: <Placeholder title="Log in" phase={4} /> },
-          { path: '/register', element: <Placeholder title="Create account" phase={4} /> },
-          { path: '/forgot-password', element: <Placeholder title="Forgot password" phase={4} /> },
+          { path: '/login', element: <LoginPage /> },
+          { path: '/register', element: <RegisterPage /> },
+          { path: '/forgot-password', element: <ForgotPasswordPage /> },
 
           { path: '*', element: <NotFound /> },
         ],

@@ -44,7 +44,11 @@ export interface PlaceOrderInput {
   payment_method: PaymentMethod;
   customer: Pick<User, 'full_name' | 'mobile_no' | 'st_add' | 'postal' | 'city_id'>;
   note?: string;
+  fulfillment: Fulfillment;
+  courier?: string;
 }
+
+export type Fulfillment = 'delivery' | 'pickup';
 
 export interface OrderQuery {
   status?: OrderStat;

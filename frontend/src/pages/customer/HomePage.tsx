@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
 import Button, { ButtonLink } from '@/components/ui/Button';
 import ProductGrid from '@/components/ui/ProductGrid';
 import { ErrorState } from '@/components/ui/States';
@@ -8,44 +7,75 @@ import { COLLECTIONS } from '@/lib/constants';
 import { useAsync } from '@/hooks/useAsync';
 import { productService } from '@/services/productService';
 import { categoryService } from '@/services/categoryService';
-import { firstImage } from '@/lib/images';
+import { firstImage, parseImages } from '@/lib/images';
 import { displayVariant, tileColor } from '@/lib/product';
 import { cn } from '@/lib/cn';
 import type { Collection, ProductWithVariants } from '@/types/models';
 
 type ProductsState = { data: ProductWithVariants[] | null; loading: boolean };
 
-function Hero({ products }: { products: ProductsState }) {
-  const { data, loading } = products;
-  const tiles = (data ?? []).slice(0, 9);
+const TILE = 'aspect-square w-36 shrink-0 rounded-2xl border border-ink/25 sm:w-44';
+
+function Carousel({ products }: { products: ProductsState }) {
+  // only products that have a real photo
+  const tiles = (products.data ?? []).filter((p) => parseImages(displayVariant(p)?.images).length > 0).slice(0, 12);
+
+  if (products.loading || tiles.length === 0) {
+    return (
+      <div className="flex justify-center gap-3 overflow-hidden" aria-hidden>
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i} className={cn(TILE, 'opacity-50', tileColor(i))} />
+        ))}
+      </div>
+    );
+  }
+
+  // the list is drawn twice so the loop has no gap, the copy is hidden from screen readers
+  const row = (copy: boolean) => (
+    <div className="flex gap-3 pr-3" aria-hidden={copy}>
+      {tiles.map((p, i) => (
+        <Link
+          key={p.product_id}
+          to={`/products/${p.product_id}`}
+          tabIndex={copy ? -1 : undefined}
+          title={p.product_name}
+          className={cn(TILE, 'overflow-hidden p-3 transition-transform hover:-translate-y-1', tileColor(i))}
+        >
+          <img src={firstImage(displayVariant(p)?.images)} alt={copy ? '' : p.product_name} className="size-full object-contain" />
+        </Link>
+      ))}
+    </div>
+  );
 
   return (
-    <section className="container-page grid items-center gap-6 py-8 md:grid-cols-2 md:gap-10 md:py-14">
-      <div className="flex flex-col items-center justify-center rounded-3xl bg-mint-light px-6 py-14 text-center md:py-24">
-        <h1 className="text-5xl font-semibold text-forest sm:text-6xl">comfy&amp;co</h1>
-        <p className="mt-4 max-w-xs text-base text-ink sm:text-lg">Bring warmth and soft texture straight into your living space</p>
+    // with reduced motion it stops moving and can be scrolled by hand instead
+    <div className="overflow-hidden py-1 motion-reduce:overflow-x-auto">
+      <div className="flex w-max animate-marquee hover:[animation-play-state:paused] focus-within:[animation-play-state:paused] motion-reduce:animate-none">
+        {row(false)}
+        {row(true)}
+      </div>
+    </div>
+  );
+}
+
+function Hero({ products }: { products: ProductsState }) {
+  return (
+    <section className="pb-14 pt-12 sm:pb-20 sm:pt-16">
+      <div className="container-page flex flex-col items-center text-center">
+        <h1 className="text-6xl font-semibold leading-none tracking-tight text-forest sm:text-8xl md:text-9xl">
+          comfy<span className="text-bark">&amp;</span>co
+        </h1>
+        <p className="mt-5 max-w-sm text-lg text-ink sm:text-xl">Bring warmth and soft texture straight into your living space</p>
         <Button
           size="lg"
           className="mt-7 px-10"
           onClick={() => document.getElementById('categories')?.scrollIntoView({ behavior: 'smooth' })}
         >
-          View categories <ArrowRight className="size-4" />
+          View Categories
         </Button>
       </div>
-
-      <div className="grid grid-cols-3 gap-2 sm:gap-3" aria-hidden={loading}>
-        {loading || tiles.length === 0
-          ? Array.from({ length: 9 }, (_, i) => <div key={i} className={cn('aspect-square rounded-2xl opacity-60', tileColor(i))} />)
-          : tiles.map((p, i) => (
-              <Link
-                key={p.product_id}
-                to={`/products/${p.product_id}`}
-                className={cn('aspect-square overflow-hidden rounded-2xl p-2 transition-transform hover:-translate-y-0.5', tileColor(i + (Math.floor(i / 3) % 2)))}
-                title={p.product_name}
-              >
-                <img src={firstImage(displayVariant(p)?.images)} alt={p.product_name} className="size-full object-contain" />
-              </Link>
-            ))}
+      <div className="mt-10 sm:mt-12">
+        <Carousel products={products} />
       </div>
     </section>
   );
@@ -145,7 +175,7 @@ function Philosophy() {
           practical space-saving pieces built to fit apartments and family rooms alike.
         </p>
         <ButtonLink to="/about" className="mt-6 w-fit px-10">
-          About Us <ArrowRight className="size-4" />
+          View About Us
         </ButtonLink>
       </div>
     </section>
