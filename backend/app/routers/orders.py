@@ -5,7 +5,7 @@ from ..config import COURIERS, DELIVERY_FEE
 from ..db import Db
 from ..deps import ADMIN_ROLES, current_user
 from ..pricing import effective_price
-from ..schemas import CancelOrderIn, PlaceOrderIn
+from ..schemas import CancelOrderIn, PlaceOrderIn, RefundIn, RefundIn
 from .users import update_profile
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -147,6 +147,21 @@ def mark_received(db: Db, order_id: int, user=Depends(current_user)):
     if order["order_stat"] != "Shipped":
         raise HTTPException(400, "Only orders that are on the way can be marked as received")
     db.execute("""update "order" set order_stat = 'Delivered' where order_id = %s""", (order_id,))
+    return queries.order_or_404(db, order_id)
+
+
+@router.post("/{order_id}/refund")
+def request_refund(db: Db, order_id: int, body: RefundIn, user=Depends(current_user)):
+    order = own_order(db, user, order_id)
+    if order["order_stat"] != "Delivered":
+        raise HTTPException(400, "You can only ask for a refund after the order is delivered")
+    if order["refund"]:
+        raise HTTPException(400, "A refund was already requested for this order")
+    details = (body.details or "").strip() or None
+    db.execute(
+        "insert into refund (order_id, reason, details, amount) values (%s, %s, %s, %s)",
+        (order_id, body.reason.strip(), details, order["total_amt"]),
+    )
     return queries.order_or_404(db, order_id)
 
 

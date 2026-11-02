@@ -1,5 +1,5 @@
 import type {
-  CartItem, City, Country, ItemCateg, Order, OrderItem, OrderStat, PaymentMethod, ProdVar, Product, User,
+  CartItem, City, Country, ItemCateg, Order, OrderItem, OrderStat, PaymentMethod, ProdVar, Product, Refund, User,
   UserRoleName, WishlistItem,
 } from './db';
 
@@ -44,6 +44,7 @@ export type OrderLine = OrderItem & {
 export type OrderWithItems = Order & {
   items: OrderLine[];
   customer_name: string;
+  refund: Refund | null; // null until the customer asks for a refund
 };
 
 export interface PlaceOrderInput {

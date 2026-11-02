@@ -91,8 +91,10 @@ def variants_with_product(db, prod_var_ids: list[int]) -> list[dict]:
 def orders_with_items(db, where: str = "", params: tuple = ()) -> list[dict]:
     orders = db.execute(
         f"""
-        select o.*, u.full_name as customer_name
+        select o.*, u.full_name as customer_name,
+          case when r.refund_id is null then null else row_to_json(r) end as refund
         from "order" o join "user" u on u.user_id = o.user_id
+        left join refund r on r.order_id = o.order_id
         {where}
         order by o.placed_at desc
         """,

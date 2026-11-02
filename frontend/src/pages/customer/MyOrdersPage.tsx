@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, Clock, PackageCheck, Search, Store, Truck, XCircle } from 'lucide-react';
+import { ChevronRight, Clock, PackageCheck, ReceiptText, Search, Store, Truck, XCircle } from 'lucide-react';
 import Button, { ButtonLink } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Input';
+import { Select, Textarea } from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
@@ -10,6 +10,7 @@ import { useCart } from '@/context/CartContext';
 import WriteReviewModal from '@/features/reviews/components/WriteReviewModal';
 import { useAsync } from '@/hooks/useAsync';
 import { orderService } from '@/services/orderService';
+import type { RefundStat } from '@/types/db';
 import type { OrderWithItems } from '@/types/models';
 import { cn } from '@/lib/cn';
 import { formatDate } from '@/lib/dates';
@@ -23,8 +24,18 @@ const CHIP: Record<Exclude<OrderTab, 'all'>, { label: string; className: string 
   to_receive: { label: 'To Receive', className: 'bg-coral/30 text-coral-dark' },
   completed: { label: 'Completed', className: 'bg-mint text-forest' },
   cancelled: { label: 'Cancelled', className: 'bg-line text-muted' },
-  refund: { label: 'Refunded', className: 'bg-cancelled text-cancelled-text' },
+  refund: { label: 'Refund', className: 'bg-cancelled text-cancelled-text' },
 };
+
+// the chip and the grey line for each refund status
+const REFUND: Record<RefundStat, { label: string; className: string; bold: string; text: string }> = {
+  Requested: { label: 'Refund Requested', className: 'bg-pending text-pending-text', bold: 'Refund requested.', text: "We're reviewing your request." },
+  Approved: { label: 'Refund Approved', className: 'bg-mint text-forest', bold: 'Refund approved.', text: "We'll send your money back soon." },
+  Rejected: { label: 'Refund Rejected', className: 'bg-line text-muted', bold: 'Refund rejected.', text: 'Contact us if you have questions.' },
+  Refunded: { label: 'Refunded', className: 'bg-forest text-white', bold: 'Refunded.', text: 'Your money has been sent back.' },
+};
+
+const REFUND_REASONS = ['Item arrived damaged', 'Wrong item received', 'Missing parts or items', 'Item not as described', 'Other'];
 
 const CANCEL_REASONS = ['Change of mind', 'Found a better price', 'Ordered the wrong item', 'Delivery takes too long', 'Other'];
 
@@ -45,6 +56,10 @@ function statusLine(order: OrderWithItems) {
       return pickup
         ? { icon: Store, bold: 'Ready for pickup.', text: 'You can pick up your order at the store.' }
         : { icon: Truck, bold: `Out for delivery${courier ? ` with ${courier}` : ''}.`, text: 'Track it on the map.' };
+    case 'refund': {
+      const r = REFUND[order.refund!.refund_stat];
+      return { icon: ReceiptText, bold: r.bold, text: r.text };
+    }
     case 'completed':
       return { icon: PackageCheck, bold: pickup ? 'Picked up.' : 'Delivered.', text: pickup ? 'You picked up this order.' : 'Your package has been delivered.' };
     default:
@@ -61,11 +76,13 @@ function OrderCard({
   onCancel,
   onReceived,
   onReview,
+  onRefund,
 }: {
   order: OrderWithItems;
   onCancel: () => void;
   onReceived: () => void;
   onReview: () => void;
+  onRefund: () => void;
 }) {
   const navigate = useNavigate();
   const { addItem } = useCart();
@@ -108,9 +125,9 @@ function OrderCard({
     ),
     completed: (
       <>
-        <ButtonLink to={`${support}&subject=refund`} variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={onRefund}>
           Request Refund
-        </ButtonLink>
+        </Button>
         <Button size="sm" onClick={onReview}>
           Write Review
         </Button>
@@ -121,8 +138,14 @@ function OrderCard({
         Buy Again
       </Button>
     ),
-    refund: null,
+    refund:
+      order.refund?.refund_stat === 'Rejected' ? (
+        <ButtonLink to={support} variant="outline" size="sm">
+          Contact Support
+        </ButtonLink>
+      ) : null,
   }[tab];
+  const chip = order.refund ? REFUND[order.refund.refund_stat] : CHIP[tab];
 
   return (
     <li className="overflow-hidden rounded-card border border-ink/20 bg-white">
@@ -137,7 +160,7 @@ function OrderCard({
                 <Link to={`/orders/${order.order_id}`} className="truncate font-medium text-ink hover:underline">
                   {first?.item_name ?? order.order_num}
                 </Link>
-                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', CHIP[tab].className)}>{CHIP[tab].label}</span>
+                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', chip.className)}>{chip.label}</span>
               </p>
               <p className="mt-0.5 text-xs text-muted">
                 {[first?.color, `${count} piece${count === 1 ? '' : 's'}`].filter(Boolean).join(' • ')}
@@ -176,7 +199,9 @@ export default function MyOrdersPage() {
   const [q, setQ] = useState('');
   const [cancelling, setCancelling] = useState<OrderWithItems | null>(null);
   const [reviewing, setReviewing] = useState<OrderWithItems | null>(null);
-  const [reason, setReason] = useState(CANCEL_REASONS[0]);
+  const [refunding, setRefunding] = useState<OrderWithItems | null>(null);
+  const [refundReason, setRefundReason] = useState(REFUND_REASONS[0]);
+  const [refundDetails, setRefundDetails] = useState('');
   const [busy, setBusy] = useState(false);
 
   const needle = q.trim().toLowerCase();
@@ -195,6 +220,7 @@ export default function MyOrdersPage() {
       await action();
       toast.success(done);
       setCancelling(null);
+      setRefunding(null);
       reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Something went wrong');
@@ -266,6 +292,11 @@ export default function MyOrdersPage() {
               }}
               onReceived={() => run(() => orderService.markReceived(o.order_id), 'Thanks! Your order is marked as received.')}
               onReview={() => setReviewing(o)}
+              onRefund={() => {
+                setRefundReason(REFUND_REASONS[0]);
+                setRefundDetails('');
+                setRefunding(o);
+              }}
             />
           ))}
         </ul>
@@ -293,6 +324,49 @@ export default function MyOrdersPage() {
             <option key={r}>{r}</option>
           ))}
         </Select>
+      </Modal>
+
+      <Modal
+        open={!!refunding}
+        onClose={() => !busy && setRefunding(null)}
+        title="Request a refund"
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRefunding(null)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              loading={busy}
+              disabled={refundReason === 'Other' && !refundDetails.trim()}
+              onClick={() =>
+                refunding &&
+                run(() => orderService.requestRefund(refunding.order_id, refundReason, refundDetails), 'Refund requested. We will review it soon.')
+              }
+            >
+              Send request
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-4 text-sm text-muted">
+          Order #{refunding?.order_num} • {refunding && formatPeso(refunding.total_amt)}
+        </p>
+        <div className="space-y-4">
+          <Select label="Reason" value={refundReason} onChange={(e) => setRefundReason(e.target.value)}>
+            {REFUND_REASONS.map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </Select>
+          <Textarea
+            label={refundReason === 'Other' ? 'Tell us what happened' : 'Details (optional)'}
+            rows={4}
+            maxLength={1000}
+            value={refundDetails}
+            onChange={(e) => setRefundDetails(e.target.value)}
+            placeholder="e.g., The table leg was cracked when it arrived."
+          />
+        </div>
       </Modal>
 
       <WriteReviewModal order={reviewing} onClose={() => setReviewing(null)} />

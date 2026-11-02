@@ -10,7 +10,7 @@ from ..config import IMAGE_BUCKET, LOW_STOCK_LIMIT, TIMEZONE
 from ..db import Db
 from ..deps import require_admin, require_super_admin
 from ..pricing import today
-from ..schemas import ArchiveIn, OrderStatusIn, ProductIn
+from ..schemas import ArchiveIn, OrderStatusIn, ProductIn, RefundStatusIn
 from ..supa import admin_client
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -253,4 +253,32 @@ def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, 
     db.execute('update "order" set order_stat = %s where order_id = %s', (body.order_stat, order_id))
     if body.order_stat != order["order_stat"]:
         audit.log(db, request, user, f"Changed order status: #{order['order_num']} to {body.order_stat}")
+    return queries.order_or_404(db, order_id)
+
+
+# Requested -> Approved / Rejected, Approved -> Refunded. Refunded and Rejected are final.
+REFUND_NEXT = {"Requested": {"Approved", "Rejected"}, "Approved": {"Refunded", "Rejected"}, "Rejected": set(), "Refunded": set()}
+
+
+@router.patch("/orders/{order_id}/refund")
+def update_refund(db: Db, request: Request, order_id: int, body: RefundStatusIn, user=Depends(require_admin)):
+    refund = db.execute(
+        """
+        select r.refund_stat, o.order_num from refund r join "order" o on o.order_id = r.order_id
+        where r.order_id = %s for update of r
+        """,
+        (order_id,),
+    ).fetchone()
+    if not refund:
+        raise HTTPException(404, "This order has no refund request")
+    if body.refund_stat != refund["refund_stat"]:
+        if body.refund_stat not in REFUND_NEXT[refund["refund_stat"]]:
+            old = refund["refund_stat"]
+            if not REFUND_NEXT[old]:
+                raise HTTPException(400, f"This refund is already {old.lower()}")
+            if body.refund_stat == "Refunded":
+                raise HTTPException(400, "Approve the refund first")
+            raise HTTPException(400, f"A refund can't go from {old} back to {body.refund_stat}")
+        db.execute("update refund set refund_stat = %s, updated_at = now() where order_id = %s", (body.refund_stat, order_id))
+        audit.log(db, request, user, f"Changed refund status: #{refund['order_num']} to {body.refund_stat}")
     return queries.order_or_404(db, order_id)

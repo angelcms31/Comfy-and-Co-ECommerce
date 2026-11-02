@@ -83,6 +83,16 @@ class OrderStatusIn(BaseModel):
     order_stat: Literal["Pending", "Shipped", "Delivered", "Cancelled"]
 
 
+
+class RefundIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=100)
+    details: str | None = Field(default=None, max_length=1000)
+
+
+class RefundStatusIn(BaseModel):
+    refund_stat: Literal["Requested", "Approved", "Rejected", "Refunded"]
+
+
 class VariantIn(BaseModel):
     prod_var_id: int | None = None
     sku: str = Field(min_length=1)

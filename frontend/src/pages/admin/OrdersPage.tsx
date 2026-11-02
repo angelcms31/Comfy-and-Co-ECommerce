@@ -14,7 +14,7 @@ import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/dates';
 import { formatPeso } from '@/lib/pricing';
 import { parseShipping } from '@/lib/tracking';
-import type { OrderStat } from '@/types/db';
+import type { OrderStat, RefundStat } from '@/types/db';
 import type { OrderWithItems } from '@/types/models';
 import AdminPageHeader from './AdminPageHeader';
 import { FilterPills, SearchBox, StatCard, TodayChip } from './AdminUi';
@@ -28,6 +28,23 @@ const SELECT_STYLE: Record<OrderStat, string> = {
   Delivered: 'bg-forest text-white',
   Cancelled: 'bg-cancelled text-cancelled-text',
 };
+
+// what each refund status can change to; Rejected and Refunded are final
+const REFUND_NEXT: Record<RefundStat, RefundStat[]> = {
+  Requested: ['Approved', 'Rejected'],
+  Approved: ['Refunded', 'Rejected'],
+  Rejected: [],
+  Refunded: [],
+};
+
+const REFUND_STYLE: Record<RefundStat, string> = {
+  Requested: 'bg-pending text-pending-text',
+  Approved: 'bg-mint text-forest',
+  Rejected: 'bg-line text-muted',
+  Refunded: 'bg-forest text-white',
+};
+
+type Tab = OrderStat | 'all' | 'refund';
 
 const itemSummary = (o: OrderWithItems) =>
   o.items.length === 0 ? '-' : o.items[0].item_name + (o.items.length > 1 ? ` +${o.items.length - 1} more` : '');
@@ -85,6 +102,22 @@ function OrderDetails({ order, onClose }: { order: OrderWithItems | null; onClos
           <dd>{pickup ? 'Store pickup' : `Standard Delivery${courier ? ` via ${courier}` : ''}`}</dd>
           <dt className="text-muted">{pickup ? 'Customer address' : 'Ship to'}</dt>
           <dd>{address}</dd>
+          {order.refund && (
+            <>
+              <dt className="text-muted">Refund</dt>
+              <dd>
+                <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', REFUND_STYLE[order.refund.refund_stat])}>
+                  {order.refund.refund_stat}
+                </span>{' '}
+                <span className="text-muted">· {formatDateTime(order.refund.requested_at)}</span>
+              </dd>
+              <dt className="text-muted">Refund reason</dt>
+              <dd>
+                {order.refund.reason}
+                {order.refund.details && <span className="mt-1 block whitespace-pre-line text-muted">{order.refund.details}</span>}
+              </dd>
+            </>
+          )}
           {cancelReason && (
             <>
               <dt className="text-muted">Cancel reason</dt>
@@ -102,19 +135,19 @@ function OrderDetails({ order, onClose }: { order: OrderWithItems | null; onClos
 export default function OrdersPage() {
   const toast = useToast();
   const orders = useAsync(() => orderService.getAll(), []);
-  const [tab, setTab] = useState<OrderStat | 'all'>('all');
+  const [tab, setTab] = useState<Tab>('all');
   const [search, setSearch] = useState('');
   const [viewing, setViewing] = useState<OrderWithItems | null>(null);
   const [saving, setSaving] = useState<number | null>(null);
 
   const all = orders.data ?? [];
-  const count = (s: OrderStat) => all.filter((o) => o.order_stat === s).length;
+  const refundRequests = all.filter((o) => o.refund?.refund_stat === 'Requested').length;
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return all.filter(
       (o) =>
-        (tab === 'all' || o.order_stat === tab) &&
+        (tab === 'all' || (tab === 'refund' ? !!o.refund : o.order_stat === tab)) &&
         (!q || [o.order_num, o.customer_name, ...o.items.map((i) => i.item_name)].some((t) => t.toLowerCase().includes(q))),
     );
   }, [all, tab, search]);
@@ -136,6 +169,19 @@ export default function OrdersPage() {
       orders.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not update the order');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const saveRefund = async (order: OrderWithItems, status: RefundStat) => {
+    setSaving(order.order_id);
+    try {
+      await orderService.updateRefund(order.order_id, status);
+      toast.success(`Refund for #${order.order_num} is now ${status}`);
+      orders.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update the refund');
     } finally {
       setSaving(null);
     }
@@ -183,17 +229,46 @@ export default function OrdersPage() {
         </select>
       ),
     },
+    {
+      key: 'refund',
+      header: 'Refund',
+      render: (o) => {
+        if (!o.refund) return <span className="text-muted">–</span>;
+        const { refund_stat } = o.refund;
+        const next = REFUND_NEXT[refund_stat];
+        return (
+          <select
+            aria-label={`Refund status of order ${o.order_num}`}
+            title={o.refund.reason}
+            value={refund_stat}
+            disabled={!next.length || saving === o.order_id}
+            onChange={(e) => saveRefund(o, e.target.value as RefundStat)}
+            className={cn(
+              'cursor-pointer rounded-full border-0 py-1 pl-3 pr-7 text-xs font-semibold focus:ring-2 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-80',
+              REFUND_STYLE[refund_stat],
+            )}
+          >
+            {[refund_stat, ...next].map((s) => (
+              <option key={s} value={s} className="bg-white text-ink">
+                {s}
+              </option>
+            ))}
+          </select>
+        );
+      },
+    },
   ];
 
   return (
     <>
       <AdminPageHeader title="Orders" subtitle="Manage and process customer orders." actions={<TodayChip />} />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
         <StatCard label="Total Orders" value={all.length} />
         <StatCard label="Pending Orders" value={count('Pending')} tone="amber" />
         <StatCard label="Out for Delivery" value={count('Shipped')} />
         <StatCard label="Cancelled" value={count('Cancelled')} tone="coral" />
+        <StatCard label="Refund Requests" value={refundRequests} tone="coral" />
       </div>
 
       <section className="rounded-card border border-line bg-white p-3 sm:p-4">
@@ -202,7 +277,11 @@ export default function OrdersPage() {
           <FilterPills
             value={tab}
             onChange={setTab}
-            options={[{ value: 'all' as const, label: 'All' }, ...STATUSES.map((s) => ({ value: s, label: s }))]}
+            options={[
+              { value: 'all' as const, label: 'All' },
+              ...STATUSES.map((s) => ({ value: s as Tab, label: s })),
+              { value: 'refund' as const, label: refundRequests ? `Refunds (${refundRequests})` : 'Refunds' },
+            ]}
           />
           <Button variant="outline" size="sm" className="sm:ml-auto" onClick={() => exportCsv(rows)} disabled={!rows.length}>
             <Download className="size-4" /> Export CSV

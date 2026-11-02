@@ -20,7 +20,7 @@ SECTION_LABEL = {"store": "store info", "policies": "order & refund policies", "
 # words in audit_log.action for the "Filter by action" menu
 ACTION_FILTERS = {
     "products": ["product"],
-    "orders": ["order"],
+    "orders": ["order", "refund"],
     "reviews": ["review"],
     "admins": ["admin account", "role of", "password of"],
     "settings": ["settings", "policies", "logged out"],

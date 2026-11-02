@@ -27,7 +27,8 @@ export const ORDER_TABS = [
 ] as const;
 export type OrderTab = (typeof ORDER_TABS)[number]['key'];
 
-export function orderTab(order: Pick<OrderWithItems, 'order_stat' | 'payment_method'>): OrderTab {
+export function orderTab(order: Pick<OrderWithItems, 'order_stat' | 'payment_method' | 'refund'>): OrderTab {
+  if (order.refund) return 'refund';
   switch (order.order_stat) {
     case 'Pending':
       return order.payment_method === 'GCash' ? 'to_pay' : 'to_ship';

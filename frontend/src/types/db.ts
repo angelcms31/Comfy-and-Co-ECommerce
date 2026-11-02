@@ -95,6 +95,20 @@ export interface CartItem {
 export type OrderStat = 'Pending' | 'Shipped' | 'Delivered' | 'Cancelled';
 export const ORDER_STATUSES: OrderStat[] = ['Pending', 'Shipped', 'Delivered', 'Cancelled'];
 
+export type RefundStat = 'Requested' | 'Approved' | 'Rejected' | 'Refunded';
+
+// refund table, added in migrations/003_refunds.sql (SCHEMA_GAPS #21)
+export interface Refund {
+  refund_id: number;
+  order_id: number;
+  reason: string;
+  details: string | null;
+  amount: number;
+  refund_stat: RefundStat;
+  requested_at: string;
+  updated_at: string;
+}
+
 export type PaymentMethod = 'GCash' | 'COD';
 export type PaymentStatus = 'Unpaid' | 'Paid';
 
