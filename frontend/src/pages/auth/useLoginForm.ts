@@ -17,7 +17,6 @@ export function useLoginForm(onSuccess: (session: Session) => Promise<string | v
   const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // the 3-try limit only lives here for now (SCHEMA_GAPS #4), a refresh resets it
   const locked = attempts >= MAX_LOGIN_ATTEMPTS;
 
   const onSubmit = async (e: FormEvent) => {

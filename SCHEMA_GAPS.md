@@ -13,7 +13,7 @@ Fields the frontend reads that are not in the ERD start with `_temp_`, so they'r
 | 1 | `review` has no field for **Hide Review** and no date | **Added:** `is_hidden` and `created_at` (see #26) | – |
 | 2 | `order` has no **checkout note** and no **payment status** (needed for GCash) | Sends `note` when placing an order, reads `_temp_note` and `_temp_payment_status` (`Unpaid` / `Paid`) | Add `note text` and `payment_stat text` |
 | 3 | `prod_var.images` is one field but the product page shows several images | Stored as comma-separated URLs. `parseImages()` in `frontend/src/lib/images.ts` accepts a string or an array | Change to `text[]`, or add a `prod_var_image` table |
-| 4 | No field for **failed login attempts** | The 3-attempt rule is kept in frontend state only, so a page refresh resets it | Count attempts on the backend, or rely on Supabase Auth rate limits |
+| 4 | No field for **failed login attempts** | The 5-attempt rule is kept in frontend state only, so a page refresh resets it | Count attempts on the backend, or rely on Supabase Auth rate limits |
 | 5 | `review` links to `prod_var_id`, but the product page shows reviews for the whole product | `GET /products/{id}/reviews` is expected to return reviews from all variants of the product | Fine as is, just needs the join on the backend |
 
 ## Found while building
