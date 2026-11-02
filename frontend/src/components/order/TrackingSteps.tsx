@@ -14,17 +14,17 @@ export default function TrackingSteps({ status, pickup, courier }: { status: Ord
     );
   }
 
-  const steps = [
+  const steps: { icon: typeof Truck; label: string; sub?: string | null }[] = [
     { icon: ClipboardList, label: 'Order placed' },
     { icon: Package, label: 'Preparing' },
-    pickup ? { icon: Store, label: 'Ready for pickup' } : { icon: Truck, label: courier ? `On the way (${courier})` : 'On the way' },
+    pickup ? { icon: Store, label: 'Ready for pickup' } : { icon: Truck, label: 'On the way', sub: courier },
     pickup ? { icon: Check, label: 'Picked up' } : { icon: House, label: 'Delivered' },
   ];
   const current = STEP_OF[status];
 
   return (
     <ol className="grid grid-cols-4">
-      {steps.map(({ icon: Icon, label }, i) => {
+      {steps.map(({ icon: Icon, label, sub }, i) => {
         const reached = i <= current;
         return (
           <li key={label} className="relative flex flex-col items-center text-center">
@@ -33,7 +33,7 @@ export default function TrackingSteps({ status, pickup, courier }: { status: Ord
             )}
             <span
               className={cn(
-                'relative grid size-10 place-items-center rounded-full border-2',
+                'relative z-10 grid size-10 place-items-center rounded-full border-2',
                 reached ? 'border-forest bg-forest text-white' : 'border-line bg-white text-muted',
                 i === current && i < 3 && 'ring-4 ring-mint',
               )}
@@ -41,6 +41,7 @@ export default function TrackingSteps({ status, pickup, courier }: { status: Ord
               <Icon className="size-5" />
             </span>
             <span className={cn('mt-2 px-1 text-[11px] leading-tight sm:text-xs', reached ? 'font-semibold text-forest' : 'text-muted')}>{label}</span>
+            {sub && <span className="mt-0.5 px-1 text-[10px] leading-tight text-muted sm:text-[11px]">{sub}</span>}
           </li>
         );
       })}

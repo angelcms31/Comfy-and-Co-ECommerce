@@ -84,7 +84,7 @@ export default function OrderConfirmationPage() {
               )}
             </div>
 
-            <DeliveryMap address={address} progress={progress} pickup={pickup} />
+            <DeliveryMap address={address} progress={progress} pickup={pickup} courier={courier} orderNum={order.order_num} />
 
             <div className="grid gap-3 text-sm sm:grid-cols-2">
               <p className="flex gap-2 rounded-xl bg-cream p-3">
