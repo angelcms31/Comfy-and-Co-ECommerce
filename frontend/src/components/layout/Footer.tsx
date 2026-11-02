@@ -1,49 +1,57 @@
 import { Link } from 'react-router-dom';
-import { categoryService } from '@/services/categoryService';
-import { useAsync } from '@/hooks/useAsync';
+import { COURIERS } from '@/lib/constants';
 import { LogoMark } from './Logo';
 
-export default function Footer() {
-  const categories = useAsync(() => categoryService.getAll(), []);
+const explore = [
+  { to: '/about', label: 'About us' },
+  { to: '/profile', label: 'My profile' },
+  { to: '/wishlist', label: 'My wishlist' },
+  { to: '/terms', label: 'Terms & Conditions' },
+  { to: '/privacy', label: 'Privacy Policy' },
+];
 
+const badge = 'rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-forest';
+
+export default function Footer() {
   return (
     <footer className="bg-forest text-white">
-      <div className="container-page grid gap-10 py-12 md:grid-cols-[1fr_auto_auto] md:gap-16">
-        <div className="flex flex-col items-center text-center md:items-start md:text-left">
-          <div className="flex items-center gap-3">
-            <LogoMark className="size-14" />
-            <span className="font-display text-4xl font-semibold sm:text-5xl">comfy&amp;co</span>
-          </div>
-          <p className="mt-3 font-display text-sm italic text-white/90">"Making every corner feel like home"</p>
+      <div className="container-page grid gap-10 py-12 sm:grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr] md:gap-16">
+        <div className="flex flex-col items-center text-center sm:items-start sm:text-left">
+          <LogoMark className="size-14" />
+          <span className="mt-2 font-display text-4xl font-semibold">comfy&amp;co</span>
+          <p className="mt-2 max-w-48 text-sm text-white/90">"Making every corner feel like home."</p>
         </div>
 
-        <div className="text-center md:text-left">
-          <h3 className="mb-3 font-sans text-sm font-semibold text-mint">Explore</h3>
-          <ul className="space-y-2 text-sm text-white/85">
-            <li><Link to="/about" className="hover:text-white">About Us</Link></li>
-            <li><Link to="/terms" className="hover:text-white">Terms &amp; Conditions</Link></li>
-            <li><Link to="/privacy" className="hover:text-white">Privacy Policy</Link></li>
+        <div className="text-center sm:text-left">
+          <h3 className="mb-3 font-sans text-sm font-semibold">Explore</h3>
+          <ul className="space-y-2 text-sm text-white/80">
+            {explore.map((l) => (
+              <li key={l.to}>
+                <Link to={l.to} className="hover:text-white">
+                  {l.label}
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
 
-        {categories.data && categories.data.length > 0 && (
-          <div className="text-center md:text-left">
-            <h3 className="mb-3 font-sans text-sm font-semibold text-mint">Categories</h3>
-            <ul className="space-y-2 text-sm text-white/85">
-              {categories.data.map((c) => (
-                <li key={c.item_categ_id}>
-                  <Link to={`/products?category=${c.item_categ_id}`} className="hover:text-white">
-                    {c.item_category}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+        <div className="text-center sm:col-span-2 sm:text-left md:col-span-1">
+          <h3 className="mb-3 font-sans text-sm font-semibold">Payment Methods</h3>
+          <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
+            <span className={badge}>GCash</span>
+            <span className={badge}>Cash on Delivery</span>
           </div>
-        )}
+          <h3 className="mb-3 mt-6 font-sans text-sm font-semibold">Courier Partners</h3>
+          <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
+            {COURIERS.map((c) => (
+              <span key={c} className={badge}>
+                {c}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
-      <div className="border-t border-white/10 py-4 text-center text-xs text-white/60">
-        © {new Date().getFullYear()} Comfy&amp;Co · Manila, Philippines
-      </div>
+      <div className="border-t border-white/10 py-4 text-center text-xs text-white/60">© {new Date().getFullYear()} comfy&amp;co. All rights reserved.</div>
     </footer>
   );
 }

@@ -2,7 +2,7 @@ import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttribu
 import { cn } from '@/lib/cn';
 
 interface FieldProps {
-  label?: string;
+  label?: ReactNode;
   error?: string | null;
   hint?: ReactNode;
   filled?: boolean; // cream background with no border, like the login form

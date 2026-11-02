@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, LogOut, Menu, Package, ShoppingCart, Star, Store, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/cn';
+import BottomNav, { BOTTOM_NAV_SPACE, BottomTab } from './BottomNav';
 import Logo from './Logo';
 
 const links = [
@@ -68,20 +69,31 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function AdminLayout() {
   const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
 
   return (
-    <div className="min-h-screen bg-cream lg:grid lg:grid-cols-[240px_1fr]">
+    <div className={cn('min-h-screen bg-cream lg:grid lg:grid-cols-[240px_1fr]', BOTTOM_NAV_SPACE)}>
       <aside className="sticky top-0 hidden h-screen lg:block">
         <Sidebar />
       </aside>
 
-      {/* small screens */}
-      <div className="sticky top-0 z-30 flex items-center gap-3 bg-forest px-4 py-3 text-white lg:hidden">
-        <button onClick={() => setOpen(true)} aria-label="Open menu">
-          <Menu className="size-6" />
-        </button>
+      {/* phone + tablet: title on top, tabs at the bottom, Menu opens the sidebar */}
+      <div className="sticky top-0 z-30 flex items-center gap-2 bg-forest px-4 py-3 text-white lg:hidden">
+        <Logo to="/admin" className="[&_img]:size-8" />
         <span className="font-display text-lg font-semibold">comfy&amp;co admin</span>
       </div>
+      <BottomNav label="Admin">
+        {links.map(({ to, label, icon: Icon, end }) => (
+          <BottomTab
+            key={to}
+            to={to}
+            label={label}
+            icon={<Icon className="size-6" />}
+            active={!open && (end ? pathname === to : pathname.startsWith(to))}
+          />
+        ))}
+        <BottomTab label="Menu" icon={<Menu className="size-6" />} active={open} onClick={() => setOpen((o) => !o)} />
+      </BottomNav>
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-ink/40" onClick={() => setOpen(false)} />

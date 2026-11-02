@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { Select } from '@/components/ui/Input';
+import Pagination from '@/components/ui/Pagination';
 import PriceTag from '@/components/ui/PriceTag';
 import Table, { type Column } from '@/components/ui/Table';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
@@ -19,6 +20,8 @@ import AdminPageHeader from './AdminPageHeader';
 import ProductFormModal from './ProductFormModal';
 
 type StockStatus = 'in' | 'low' | 'out' | 'hidden';
+
+const PAGE_SIZE = 10;
 
 const STATUS: Record<StockStatus, { label: string; className: string }> = {
   in: { label: 'In Stock', className: 'bg-mint text-forest' },
@@ -63,6 +66,13 @@ export default function InventoryPage() {
         (!q || [r.variant.prod_var_name, r.variant.sku, r.product.category.item_category].some((t) => t.toLowerCase().includes(q))),
     );
   }, [products.data, search, status]);
+
+  // back to page 1 when the filter changes, and stay in range when rows get deleted
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [search, status]);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pages);
+  const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const openForm = (product: ProductWithVariants | null) => {
     setEditing(product);
@@ -188,7 +198,14 @@ export default function InventoryPage() {
             message={products.data.length === 0 ? 'Add your first product to start selling.' : 'Try another search or status.'}
           />
         )}
-        {rows.length > 0 && <Table columns={columns} rows={rows} rowKey={(r) => r.variant.prod_var_id} />}
+        {rows.length > 0 && (
+          <>
+            <Table columns={columns} rows={pageRows} rowKey={(r) => r.variant.prod_var_id} />
+            <div className="border-t border-line">
+              <Pagination page={currentPage} pageSize={PAGE_SIZE} total={rows.length} onChange={setPage} />
+            </div>
+          </>
+        )}
       </section>
 
       <ProductFormModal
