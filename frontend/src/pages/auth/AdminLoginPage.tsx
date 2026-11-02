@@ -1,63 +1,31 @@
-import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import PasswordInput from '@/components/ui/PasswordInput';
 import { LogoMark } from '@/components/layout/Logo';
 import { useAuth } from '@/context/AuthContext';
-import { authService } from '@/services/authService';
-import { MAX_LOGIN_ATTEMPTS } from '@/lib/constants';
 import { cn } from '@/lib/cn';
-
-const WRONG_LOGIN = 'Incorrect email or password'; // message from the backend
+import { useLoginForm } from './useLoginForm';
 
 export default function AdminLoginPage() {
   const { user, signIn, logout } = useAuth();
   const navigate = useNavigate();
-  const from = (useLocation().state as { from?: string } | null)?.from;
+  const state = useLocation().state as { from?: string; notice?: string } | null;
+  const from = state?.from;
+  const target = from?.startsWith('/admin') ? from : '/admin';
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [attempts, setAttempts] = useState(0);
-  const [loading, setLoading] = useState(false);
-
-  // the 3-try limit only lives here for now (SCHEMA_GAPS #4), a refresh resets it
-  const locked = attempts >= MAX_LOGIN_ATTEMPTS;
-
-  if (user?.role === 'admin') return <Navigate to={from?.startsWith('/admin') ? from : '/admin'} replace />;
-
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (locked) return;
-    if (!email.trim() || !password) {
-      setError('Please enter your email and password.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const session = await authService.login(email.trim(), password, remember);
+  const { email, setEmail, password, setPassword, remember, setRemember, locked, loading, hasError, errorText, onSubmit } = useLoginForm(
+    async (session) => {
       if (session.user.role !== 'admin') {
         await logout();
-        setError("This account doesn't have admin access.");
-        return;
+        return "This account doesn't have admin access.";
       }
       signIn(session);
-      navigate(from?.startsWith('/admin') ? from : '/admin', { replace: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Something went wrong';
-      if (message === WRONG_LOGIN) setAttempts((n) => n + 1);
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      navigate(target, { replace: true });
+    },
+  );
 
-  const left = MAX_LOGIN_ATTEMPTS - attempts;
-  const hasError = !!error || locked;
+  if (user?.role === 'admin') return <Navigate to={target} replace />;
 
   return (
     <div className="grid min-h-screen bg-cream md:grid-cols-2">
@@ -76,6 +44,11 @@ export default function AdminLoginPage() {
         <form onSubmit={onSubmit} noValidate className="w-full max-w-sm rounded-2xl bg-white p-7 shadow-card sm:p-8">
           <h1 className="text-3xl font-semibold text-forest">Welcome back</h1>
           <p className="mt-1 text-sm text-muted">Log in to manage comfy&amp;co.</p>
+          {state?.notice && (
+            <p role="status" className="mt-4 rounded-xl bg-mint-light px-3.5 py-2.5 text-sm text-forest">
+              {state.notice}
+            </p>
+          )}
 
           <div className="mt-6 space-y-4">
             <Input
@@ -97,13 +70,7 @@ export default function AdminLoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               filled
               invalid={hasError}
-              error={
-                locked
-                  ? 'Too many failed attempts. Please reset your password.'
-                  : error
-                    ? error.replace(/\.?$/, '.') + (error === WRONG_LOGIN ? ` ${left} ${left === 1 ? 'try' : 'tries'} left.` : '')
-                    : null
-              }
+              error={errorText}
               disabled={locked}
             />
           </div>

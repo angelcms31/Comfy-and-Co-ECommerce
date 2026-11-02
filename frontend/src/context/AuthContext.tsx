@@ -6,6 +6,7 @@ interface AuthValue {
   user: UserProfile | null;
   loading: boolean; // true while checking the saved session on first load
   signIn: (session: Session) => void;
+  updateUser: (user: UserProfile) => void; // after the profile is edited
   logout: () => Promise<void>;
 }
 
@@ -23,13 +24,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback((session: Session) => setUser(session.user), []);
+  const updateUser = useCallback((profile: UserProfile) => setUser(profile), []);
 
   const logout = useCallback(async () => {
     await authService.logout();
     setUser(null);
   }, []);
 
-  return <AuthContext.Provider value={{ user, loading, signIn, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, signIn, updateUser, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
