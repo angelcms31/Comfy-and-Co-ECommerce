@@ -15,12 +15,15 @@ def _configure(conn):
 
 
 # prepare_threshold=None because the Supabase pooler doesn't support prepared statements
+# check: Supabase drops idle connections (or the laptop sleeps), so test each one before use and replace it if it's dead
 pool = ConnectionPool(
     DATABASE_URL,
     min_size=1,
     max_size=10,
     open=False,
     configure=_configure,
+    check=ConnectionPool.check_connection,
+    max_idle=300,
     kwargs={"row_factory": dict_row, "prepare_threshold": None},
 )
 

@@ -94,6 +94,14 @@ Each user has one `wishlist_col`. Create it on the first add. All return `Wishli
 | POST | `/wishlist/items` | `{ prod_var_id }`, ignore if already there |
 | DELETE | `/wishlist/items/{wishlist_item_id}` | – |
 
+## Users
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/users/me` | – | `UserProfile` |
+| PATCH | `/users/me` | any of `{ full_name, birthdate, mobile_no, st_add, postal, city_id }` | `UserProfile` |
+| POST | `/users/me/deactivate` | – | 204, bans the login (SCHEMA_GAPS #19); admins get 400 |
+
 ## Orders
 
 | Method | Path | Body | Returns |
@@ -109,7 +117,9 @@ Each user has one `wishlist_col`. Create it on the first add. All return `Wishli
   "lines": [{ "prod_var_id": 19, "quantity": 1 }],
   "payment_method": "GCash",                 // or "COD"
   "customer": { "full_name": "...", "mobile_no": "...", "st_add": "...", "postal": "1600", "city_id": 4 },
-  "note": "Please call before delivery"
+  "note": "Please call before delivery",
+  "fulfillment": "delivery",                 // or "pickup"; delivery adds DELIVERY_FEE (₱100) to total_amt
+  "courier": "LBC"                           // required for delivery, one of COURIERS in backend/app/config.py
 }
 ```
 

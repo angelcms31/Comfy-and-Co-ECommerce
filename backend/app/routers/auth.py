@@ -12,7 +12,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def session_for(db, email: str, password: str) -> dict:
     try:
         res = public_client().auth.sign_in_with_password({"email": email, "password": password})
-    except Exception:
+    except Exception as e:
+        if "banned" in str(e).lower():
+            raise HTTPException(403, "This account has been deactivated")
         raise HTTPException(401, "Incorrect email or password")
 
     user = queries.profile(db, res.user.id)

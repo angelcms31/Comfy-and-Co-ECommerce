@@ -14,4 +14,6 @@ FRONTEND_URLS = [u.strip() for u in os.getenv("FRONTEND_URLS", "http://localhost
 
 IMAGE_BUCKET = os.getenv("IMAGE_BUCKET", "products")
 LOW_STOCK_LIMIT = 5
+DELIVERY_FEE = 100  # standard delivery, store pickup is free
+COURIERS = ["J&T Express", "LBC", "Flash Express", "Ninja Van"]
 TIMEZONE = "Asia/Manila"

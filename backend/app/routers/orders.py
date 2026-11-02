@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from .. import queries
+from ..config import COURIERS, DELIVERY_FEE
 from ..db import Db
 from ..deps import current_user
 from ..pricing import effective_price
@@ -41,6 +42,9 @@ def place_order(db: Db, body: PlaceOrderIn, user=Depends(current_user)):
         if qty > v["stocks"]:
             raise HTTPException(400, f"Only {v['stocks']} left of {v['prod_var_name']}")
 
+    if body.fulfillment == "delivery" and body.courier not in COURIERS:
+        raise HTTPException(400, "Please pick a courier")
+
     # one address per user, so the info confirmed at checkout is saved to their profile
     customer = body.customer.model_dump()
     update_profile(db, user["user_id"], customer)
@@ -54,6 +58,11 @@ def place_order(db: Db, body: PlaceOrderIn, user=Depends(current_user)):
         total += price * qty
         items.append((prod_var_id, v["prod_var_name"], price, qty, price * qty))
 
+    # the delivery fee goes on top of the items; disc_amt stays the promo savings only (SCHEMA_GAPS #8)
+    fee = DELIVERY_FEE if body.fulfillment == "delivery" else 0
+    address = queries.address_text(db, customer["st_add"], customer["city_id"], customer["postal"])
+    shipping_add = f"{address} (Standard Delivery via {body.courier})" if fee else f"Store pickup. Customer address: {address}"
+
     # note: the checkout note has no column yet (SCHEMA_GAPS #2), so body.note isn't saved
     order = db.execute(
         """
@@ -66,9 +75,9 @@ def place_order(db: Db, body: PlaceOrderIn, user=Depends(current_user)):
             user["user_id"],
             subtotal,
             subtotal - total,
-            total,
+            total + fee,
             body.payment_method,
-            queries.address_text(db, customer["st_add"], customer["city_id"], customer["postal"]),
+            shipping_add,
         ),
     ).fetchone()
 

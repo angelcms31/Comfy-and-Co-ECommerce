@@ -70,6 +70,9 @@ class PlaceOrderIn(BaseModel):
     payment_method: Literal["GCash", "COD"]
     customer: Customer
     note: str | None = None
+    # no columns for these yet (SCHEMA_GAPS #18), they're written into shipping_add
+    fulfillment: Literal["delivery", "pickup"] = "delivery"
+    courier: str | None = None
 
 
 class OrderStatusIn(BaseModel):

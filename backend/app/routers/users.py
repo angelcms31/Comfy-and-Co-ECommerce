@@ -1,12 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Response
 from psycopg import sql
 
 from .. import queries
 from ..db import Db
 from ..deps import current_user
 from ..schemas import ProfilePatch
+from ..supa import admin_client
 
 router = APIRouter(prefix="/users", tags=["users"])
+log = logging.getLogger(__name__)
 
 
 def update_profile(db, user_id: str, fields: dict):
@@ -29,3 +33,17 @@ def get_me(user=Depends(current_user)):
 def patch_me(db: Db, body: ProfilePatch, user=Depends(current_user)):
     update_profile(db, user["user_id"], body.model_dump(exclude_unset=True))
     return queries.profile(db, user["user_id"])
+
+
+# no is_active column, so the Supabase Auth login is banned instead. Their orders and reviews stay.
+@router.post("/me/deactivate", status_code=204)
+def deactivate_me(user=Depends(current_user)):
+    if user["role"] == "admin":
+        raise HTTPException(400, "Admin accounts can't be deactivated here")
+    try:
+        # user_id comes back from psycopg as a UUID object, supabase wants a string
+        admin_client().auth.admin.update_user_by_id(str(user["user_id"]), {"ban_duration": "876000h"})
+    except Exception:
+        log.exception("deactivate failed for %s", user["user_id"])
+        raise HTTPException(500, "Could not deactivate the account, please try again")
+    return Response(status_code=204)
