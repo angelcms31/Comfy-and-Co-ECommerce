@@ -71,6 +71,28 @@ npm install
 npm run dev
 ```
 
+## Deploy
+
+The store runs on **Vercel** and the API on **Render**, both from this GitHub repo. Every push to `main` redeploys both.
+
+**1. Backend on Render**
+
+1. On [render.com](https://render.com), **New → Blueprint**, pick this repo. It reads `render.yaml`.
+2. Fill in the values it asks for, copied from `backend/.env`. Leave `FRONTEND_URLS` as `http://localhost:5173` for now.
+3. When it's live, open `https://<your-service>.onrender.com/api/health`. It should say `{"ok":true}`.
+
+The free plan sleeps after 15 minutes without visits, so the first request after that takes about 30–50 seconds.
+
+**2. Store on Vercel**
+
+1. On [vercel.com](https://vercel.com), **Add New → Project**, import this repo.
+2. Set **Root Directory** to `frontend`. Vercel detects Vite.
+3. Add the environment variable `VITE_API_URL` = `https://<your-service>.onrender.com/api`, then **Deploy**.
+
+**3. Connect them**
+
+In Render, set `FRONTEND_URLS` to the Vercel URL (e.g. `https://comfy-and-co.vercel.app`, no `/` at the end) and save. Render restarts the API, and after that the store can call it.
+
 ## Project structure
 
 ```
