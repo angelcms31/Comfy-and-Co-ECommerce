@@ -96,7 +96,7 @@ export default function CartPage() {
   };
 
   let content;
-  if (loading) content = <LoadingState label="Loading your cart..." />;
+  if (loading) content = <LoadingState label="Loading your cart..." layout="list" />;
   else if (error) content = <ErrorState message={error} onRetry={reload} />;
   else if (lines.length === 0) {
     content = (

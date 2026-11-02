@@ -61,7 +61,7 @@ export default function WishlistPage() {
 
   let content;
   if (authLoading || (user && loading)) {
-    content = <LoadingState />;
+    content = <LoadingState layout="list" />;
   } else if (!user) {
     content = (
       <EmptyState

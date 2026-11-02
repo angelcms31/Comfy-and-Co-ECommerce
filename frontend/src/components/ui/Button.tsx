@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import LoadingDots from './LoadingDots';
 
 type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
@@ -40,7 +40,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export default function Button({ variant, size, loading, className, children, disabled, type = 'button', ...rest }: ButtonProps) {
   return (
     <button type={type} className={buttonClass(variant, size, className)} disabled={disabled || loading} {...rest}>
-      {loading && <Loader2 className="size-4 animate-spin" />}
+      {loading && <LoadingDots size="sm" />}
       {children}
     </button>
   );

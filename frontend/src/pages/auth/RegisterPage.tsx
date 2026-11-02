@@ -64,20 +64,21 @@ export default function RegisterPage() {
   };
 
   return (
-    <AuthCard title="Create an account" subtitle="Save your favorites and check out faster.">
+    <AuthCard title="Create an account" subtitle="Save your favorites and check out faster." wide>
       <form onSubmit={onSubmit} noValidate className="space-y-4">
-        <Input label="Full name" autoComplete="name" value={form.full_name} onChange={set('full_name')} filled error={errors.full_name} />
-        <Input
-          label="Email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@example.com"
-          value={form.email}
-          onChange={set('email')}
-          filled
-          error={errors.email}
-        />
         <div className="grid gap-4 sm:grid-cols-2">
+          <Input label="Full name" autoComplete="name" value={form.full_name} onChange={set('full_name')} filled error={errors.full_name} />
+          <Input
+            label="Email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            value={form.email}
+            onChange={set('email')}
+            filled
+            error={errors.email}
+          />
+
           <Input
             label="Mobile number"
             type="tel"
@@ -90,28 +91,30 @@ export default function RegisterPage() {
             hint="Optional"
           />
           <Input label="Birthdate" type="date" max={today()} value={form.birthdate} onChange={set('birthdate')} filled error={errors.birthdate} hint="Optional" />
+          <PasswordInput
+            label="Password"
+            autoComplete="new-password"
+            placeholder="At least 8 characters"
+            value={form.password}
+            onChange={set('password')}
+            filled
+            error={errors.password}
+          />
+          <PasswordInput
+            label="Confirm password"
+            autoComplete="new-password"
+            value={form.confirm}
+            onChange={set('confirm')}
+            filled
+            error={errors.confirm}
+          />
         </div>
-        <PasswordInput
-          label="Password"
-          autoComplete="new-password"
-          placeholder="At least 8 characters"
-          value={form.password}
-          onChange={set('password')}
-          filled
-          error={errors.password}
-        />
-        <PasswordInput
-          label="Confirm password"
-          autoComplete="new-password"
-          value={form.confirm}
-          onChange={set('confirm')}
-          filled
-          error={errors.confirm}
-        />
 
-        <Button type="submit" size="lg" className="w-full" loading={loading}>
-          Create account
-        </Button>
+        <div className="flex justify-center pt-2">
+          <Button type="submit" size="lg" className="w-full sm:max-w-sm" loading={loading}>
+            Create account
+          </Button>
+        </div>
         <p className="text-center text-xs text-muted">
           By creating an account you agree to our{' '}
           <Link to="/terms" className="underline hover:text-forest">

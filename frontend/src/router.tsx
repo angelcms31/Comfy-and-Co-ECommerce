@@ -12,6 +12,9 @@ import RegisterPage from '@/pages/auth/RegisterPage';
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
 import DashboardPage from '@/pages/admin/DashboardPage';
 import InventoryPage from '@/pages/admin/InventoryPage';
+import AdminOrdersPage from '@/pages/admin/OrdersPage';
+import AdminReviewsPage from '@/pages/admin/ReviewsPage';
+import SettingsPage from '@/pages/admin/SettingsPage';
 import HomePage from '@/pages/customer/HomePage';
 import ProductListPage from '@/pages/customer/ProductListPage';
 import ProductDetailsPage from '@/pages/customer/ProductDetailsPage';
@@ -19,9 +22,11 @@ import WishlistPage from '@/pages/customer/WishlistPage';
 import CartPage from '@/pages/customer/CartPage';
 import CheckoutPage from '@/pages/customer/CheckoutPage';
 import OrderConfirmationPage from '@/pages/customer/OrderConfirmationPage';
+import MyOrdersPage from '@/pages/customer/MyOrdersPage';
 import ProfilePage from '@/pages/customer/account/ProfilePage';
 import ShippingPage from '@/pages/customer/account/ShippingPage';
 import AboutPage from '@/pages/customer/AboutPage';
+import ContactPage from '@/pages/customer/ContactPage';
 import PolicyPage from '@/pages/customer/PolicyPage';
 import Placeholder from '@/pages/Placeholder';
 import NotFound from '@/pages/NotFound';
@@ -51,6 +56,7 @@ export const router = createBrowserRouter([
           { path: '/products/:productId', element: <ProductDetailsPage /> },
           { path: '/wishlist', element: <WishlistPage /> },
           { path: '/about', element: <AboutPage /> },
+          { path: '/contact', element: <ContactPage /> },
           { path: '/terms', element: <PolicyPage page="terms" /> },
           { path: '/privacy', element: <PolicyPage page="privacy" /> },
 
@@ -59,7 +65,7 @@ export const router = createBrowserRouter([
           { path: '/checkout/shipping', element: <RequireLogin><ShippingPage /></RequireLogin> },
           { path: '/profile', element: <RequireLogin><ProfilePage /></RequireLogin> },
           { path: '/checkout/gcash/:orderId', element: <Placeholder title="GCash payment" phase={3} /> },
-          { path: '/orders', element: <Placeholder title="My orders" phase={3} /> },
+          { path: '/orders', element: <RequireLogin><MyOrdersPage /></RequireLogin> },
           { path: '/orders/:orderId', element: <RequireLogin><OrderConfirmationPage /></RequireLogin> },
 
           { path: '/login', element: <LoginPage /> },
@@ -80,8 +86,9 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <DashboardPage /> },
           { path: 'inventory', element: <InventoryPage /> },
-          { path: 'orders', element: <Placeholder title="Orders" phase={5} /> },
-          { path: 'reviews', element: <Placeholder title="Reviews" phase={5} /> },
+          { path: 'orders', element: <AdminOrdersPage /> },
+          { path: 'reviews', element: <AdminReviewsPage /> },
+          { path: 'settings', element: <RequireAdmin superOnly><SettingsPage /></RequireAdmin> },
         ],
       },
     ],

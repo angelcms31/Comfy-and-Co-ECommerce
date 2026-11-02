@@ -93,7 +93,7 @@ export default function ProductDetailsPage() {
   useEffect(() => setShowAll(false), [productId]);
 
   if (!Number.isInteger(productId)) return <NotFound />;
-  if (loading) return <LoadingState label="Loading product..." />;
+  if (loading) return <div className="container-page py-8"><LoadingState label="Loading product..." layout="detail" /></div>;
   if (error) {
     return error.toLowerCase().includes('not found') ? <NotFound /> : <ErrorState message={error} onRetry={reload} />;
   }

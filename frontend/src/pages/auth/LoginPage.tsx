@@ -4,6 +4,7 @@ import Input from '@/components/ui/Input';
 import PasswordInput from '@/components/ui/PasswordInput';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/cn';
+import { isAdmin } from '@/lib/roles';
 import AuthCard from './AuthCard';
 import { useLoginForm } from './useLoginForm';
 
@@ -17,7 +18,7 @@ export default function LoginPage() {
     async (session) => {
       signIn(session);
       // admins can use this page too, they go straight to the dashboard
-      navigate(session.user.role === 'admin' ? '/admin' : from, { replace: true });
+      navigate(isAdmin(session.user) ? '/admin' : from, { replace: true });
     },
   );
 

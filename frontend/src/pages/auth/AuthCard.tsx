@@ -3,10 +3,23 @@ import { CheckCircle2 } from 'lucide-react';
 import { LogoMark } from '@/components/layout/Logo';
 
 // white card on the butter checker pattern, used by the customer login / sign up / reset pages
-export default function AuthCard({ title, subtitle, notice, children }: { title: string; subtitle?: ReactNode; notice?: string | null; children: ReactNode }) {
+// wide puts the form in two columns on bigger screens so long forms fit without scrolling
+export default function AuthCard({
+  title,
+  subtitle,
+  notice,
+  wide,
+  children,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  notice?: string | null;
+  wide?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className="checker-butter flex justify-center px-4 py-12 sm:py-16">
-      <div className="w-full max-w-md rounded-2xl bg-white p-7 shadow-card sm:p-9">
+    <div className={`checker-butter flex justify-center px-4 ${wide ? 'py-8 sm:py-10' : 'py-12 sm:py-16'}`}>
+      <div className={`w-full rounded-2xl bg-white p-7 shadow-card sm:p-9 ${wide ? 'max-w-3xl' : 'max-w-md'}`}>
         <LogoMark className="mx-auto size-12" />
         <h1 className="mt-3 text-center text-3xl font-semibold text-forest">{title}</h1>
         {subtitle && <p className="mt-1 text-center text-sm text-muted">{subtitle}</p>}

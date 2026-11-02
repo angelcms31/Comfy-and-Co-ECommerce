@@ -18,31 +18,22 @@ interface ToastApi {
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-const DURATION = 3500;
-
-const styles: Record<ToastType, { title: string; icon: ReactNode; circle: string; bar: string }> = {
-  success: { title: 'Success', icon: <Check className="size-7" strokeWidth={3} />, circle: 'bg-mint text-forest', bar: 'bg-forest' },
-  error: { title: 'Oops!', icon: <AlertCircle className="size-7" />, circle: 'bg-cancelled text-coral-dark', bar: 'bg-coral-dark' },
-  info: { title: 'Heads up', icon: <Info className="size-7" />, circle: 'bg-butter text-forest', bar: 'bg-forest' },
+const styles: Record<ToastType, { title: string; icon: ReactNode; circle: string }> = {
+  success: { title: 'Success', icon: <Check className="size-7" strokeWidth={3} />, circle: 'bg-mint text-forest' },
+  error: { title: 'Oops!', icon: <AlertCircle className="size-7" />, circle: 'bg-cancelled text-coral-dark' },
+  info: { title: 'Heads up', icon: <Info className="size-7" />, circle: 'bg-butter text-forest' },
 };
 
 let nextId = 1;
 
 // one message at a time, shown as a card in the middle of the screen.
-// the page behind stays clickable, it closes by itself or with the X
+// no timer: it stays until OK or the X is pressed, and a new message replaces the old one
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastItem | null>(null);
 
   const dismiss = useCallback((id: number) => setToast((t) => (t?.id === id ? null : t)), []);
 
-  const show = useCallback(
-    (type: ToastType, message: string) => {
-      const id = nextId++;
-      setToast({ id, type, message });
-      setTimeout(() => dismiss(id), DURATION);
-    },
-    [dismiss],
-  );
+  const show = useCallback((type: ToastType, message: string) => setToast({ id: nextId++, type, message }), []);
 
   const [api] = useState<ToastApi>(() => ({
     success: (m) => show('success', m),
@@ -68,11 +59,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div className={cn('mx-auto grid size-14 place-items-center rounded-full', s.circle)}>{s.icon}</div>
             <p className="mt-3 font-display text-xl font-semibold text-forest">{s.title}</p>
             <p className="mt-1 text-sm text-ink">{toast.message}</p>
-            {/* shrinks to show when it will close */}
-            <div
-              className={cn('absolute inset-x-0 bottom-0 h-1 origin-left animate-shrink motion-reduce:hidden', s.bar)}
-              style={{ animationDuration: `${DURATION}ms` }}
-            />
+            <button
+              onClick={() => dismiss(toast.id)}
+              autoFocus
+              className="mt-5 w-full rounded-full bg-forest py-2.5 text-sm font-medium text-white transition-colors hover:bg-forest-light"
+            >
+              OK
+            </button>
           </div>
         )}
       </div>

@@ -69,7 +69,7 @@ export default function CheckoutPage() {
   const [placing, setPlacing] = useState(false);
 
   if (!user) return null; // RequireLogin handles this
-  if (cart.loading) return <LoadingState label="Loading your cart..." />;
+  if (cart.loading) return <div className="container-page max-w-4xl py-8"><LoadingState label="Loading your cart..." layout="list" /></div>;
   if (cart.error) return <ErrorState message={cart.error} onRetry={cart.reload} />;
 
   // the items ticked in the cart (all of them if the cart was skipped)
