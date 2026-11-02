@@ -5,7 +5,7 @@ from psycopg import sql
 
 from .. import queries
 from ..db import Db
-from ..deps import current_user
+from ..deps import ADMIN_ROLES, current_user
 from ..schemas import ProfilePatch
 from ..supa import admin_client
 
@@ -38,7 +38,7 @@ def patch_me(db: Db, body: ProfilePatch, user=Depends(current_user)):
 # no is_active column, so the Supabase Auth login is banned instead. Their orders and reviews stay.
 @router.post("/me/deactivate", status_code=204)
 def deactivate_me(user=Depends(current_user)):
-    if user["role"] == "admin":
+    if user["role"] in ADMIN_ROLES:
         raise HTTPException(400, "Admin accounts can't be deactivated here")
     try:
         # user_id comes back from psycopg as a UUID object, supabase wants a string

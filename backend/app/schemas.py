@@ -75,6 +75,10 @@ class PlaceOrderIn(BaseModel):
     courier: str | None = None
 
 
+class CancelOrderIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=200)
+
+
 class OrderStatusIn(BaseModel):
     order_stat: Literal["Pending", "Shipped", "Delivered", "Cancelled"]
 
@@ -101,5 +105,71 @@ class ProductIn(BaseModel):
     variants: list[VariantIn] = Field(min_length=1)
 
 
-class ReviewHiddenIn(BaseModel):
-    is_hidden: bool
+class ArchiveIn(BaseModel):
+    archived: bool
+
+
+# ---------- reviews ----------
+
+class ReviewIn(BaseModel):
+    prod_var_id: int
+    rating: int = Field(ge=1, le=5)
+    content: str = Field(min_length=1, max_length=2000)
+    photos: list[str] = Field(default_factory=list, max_length=3)
+
+
+class ReviewFlagsIn(BaseModel):
+    is_hidden: bool | None = None
+    is_featured: bool | None = None
+
+
+class ReviewReplyIn(BaseModel):
+    reply: str = Field(min_length=1, max_length=1000)
+
+
+# ---------- admins (Super Admin only) ----------
+
+AdminRole = Literal["admin", "super_admin"]
+
+
+class AdminIn(BaseModel):
+    full_name: str = Field(min_length=1)
+    email: EmailStr
+    password: str = Field(min_length=8)
+    role: AdminRole = "admin"
+
+
+class AdminRoleIn(BaseModel):
+    role: AdminRole
+
+
+class PasswordIn(BaseModel):
+    password: str = Field(min_length=8)
+
+
+# ---------- settings ----------
+
+class StoreSettingsIn(BaseModel):
+    name: str = Field(min_length=1)
+    support_email: EmailStr
+    phone: str = Field(min_length=1)
+    address: str = Field(min_length=1)
+    hours: str = Field(min_length=1)
+
+
+class PolicySettingsIn(BaseModel):
+    cancellation_window: str
+    return_policy: str
+    refund_method: str
+    free_shipping_threshold: float = Field(ge=0)
+
+
+class RegionalSettingsIn(BaseModel):
+    currency: str
+    vat_percent: float = Field(ge=0, le=100)
+    timezone: str
+
+
+class SecuritySettingsIn(BaseModel):
+    require_2fa: bool
+    inactivity_minutes: int = Field(ge=5, le=480)

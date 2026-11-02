@@ -1,6 +1,29 @@
 """Loads rows and joins them into the shapes the frontend expects (see frontend/src/types/models.ts)."""
 
+import json
+from functools import cache
+from pathlib import Path
+
 from fastapi import HTTPException
+
+from .config import SETTING_DEFAULTS
+
+
+def setting(db, key: str) -> dict:
+    # saved values on top of the defaults, so new fields added later still have a value
+    row = db.execute("select value from store_setting where key = %s", (key,)).fetchone()
+    return {**SETTING_DEFAULTS.get(key, {}), **(row["value"] if row else {})}
+
+
+@cache
+def subcategories() -> dict[str, str]:
+    # item_categ has no subcategory (SCHEMA_GAPS #16), so it's read from the inventory sheet data by product name
+    path = Path(__file__).resolve().parent.parent / "supabase" / "products.json"
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {r["name"].strip().lower(): r["subcategory"] for r in rows if r.get("subcategory")}
 
 
 def profile(db, user_id: str) -> dict | None:
@@ -39,8 +62,10 @@ def products_with_variants(db, product_ids: list[int] | None = None) -> list[dic
 
     ids = [p["product_id"] for p in products]
     variants = db.execute("select * from prod_var where product_id = any(%s) order by prod_var_id", (ids,)).fetchall()
+    subs = subcategories()
     for p in products:
         p["variants"] = [v for v in variants if v["product_id"] == p["product_id"]]
+        p["_temp_subcategory"] = subs.get(p["product_name"].strip().lower())
     return products
 
 
@@ -75,7 +100,15 @@ def orders_with_items(db, where: str = "", params: tuple = ()) -> list[dict]:
     ).fetchall()
 
     ids = [o["order_id"] for o in orders]
-    items = db.execute("select * from order_item where order_id = any(%s) order by order_item_id", (ids,)).fetchall()
+    # product_id, color and images come from the variant for the order list (null if the product was deleted)
+    items = db.execute(
+        """
+        select oi.*, v.product_id, v.prod_attr as color, v.images
+        from order_item oi left join prod_var v on v.prod_var_id = oi.prod_var_id
+        where oi.order_id = any(%s) order by oi.order_item_id
+        """,
+        (ids,),
+    ).fetchall()
     for o in orders:
         o["items"] = [i for i in items if i["order_id"] == o["order_id"]]
     return orders

@@ -108,7 +108,9 @@ Each user has one `wishlist_col`. Create it on the first add. All return `Wishli
 |---|---|---|---|
 | POST | `/orders` | `PlaceOrderInput` | `OrderWithItems` |
 | GET | `/orders/me` | – | `OrderWithItems[]`, newest first |
-| GET | `/orders/{order_id}` | – | `OrderWithItems` (only the owner or an admin) |
+| GET | `/orders/{order_id}` | – | `OrderWithItems` (only the owner or an admin). Each item also has `product_id`, `color` and `images` from its variant |
+| POST | `/orders/{order_id}/cancel` | `{ reason }` | `OrderWithItems`; only `Pending` orders, puts the stock back (SCHEMA_GAPS #20) |
+| POST | `/orders/{order_id}/received` | – | `OrderWithItems`; the customer confirms a `Shipped` order, it becomes `Delivered` |
 | POST | `/orders/{order_id}/gcash/confirm` | – | `OrderWithItems` (mock GCash; can't be marked paid until SCHEMA_GAPS #2) |
 
 ```jsonc
@@ -136,19 +138,47 @@ When placing an order the backend should:
 // OrderWithItems = order row + "items": order_item[] + "customer_name": "Juan Dela Cruz"
 ```
 
-## Admin (role must be admin, return 403 otherwise)
+## Reviews (customers)
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
-| GET | `/admin/dashboard` | – | `DashboardSummary` |
+| GET | `/reviews/mine` | – | `ReviewWithMeta[]` the logged-in customer wrote |
+| POST | `/reviews` | `{ prod_var_id, rating, content, photos: string[] }` | `ReviewWithMeta`; only after an order with that item is `Delivered` (403 otherwise). Writing again for the same item updates it |
+| POST | `/reviews/uploads` | multipart `file` | `{ url }` for `photos` (max 3 per review) |
+| GET | `/store-info` | – | public store name, support email, phone, address, hours (Settings > Store Info) |
+
+## Admin (role `admin` or `super_admin`, 403 otherwise)
+
+Every change below is written to `audit_log` (who, what, IP, device).
+
+| Method | Path | Body / query | Returns |
+|---|---|---|---|
+| GET | `/admin/dashboard` | `range` (`7d` / `30d`) | `DashboardSummary` |
 | POST | `/admin/products` | `ProductInput` | `ProductWithVariants` |
 | PUT | `/admin/products/{product_id}` | `ProductInput` | `ProductWithVariants` |
-| DELETE | `/admin/products/{product_id}` | – | 204 |
+| PATCH | `/admin/products/{product_id}/archive` | `{ archived }` | `ProductWithVariants`; archived = `is_avail` false, hidden from the store |
+| DELETE | `/admin/products/{product_id}` | – | 204, **Super Admin only** |
 | POST | `/admin/uploads` | multipart `file` (JPG / PNG / WEBP, max 5 MB) | `{ url }`, put it in `prod_var.images` |
 | GET | `/admin/orders` | `status`, `q` (order # or customer name) | `OrderWithItems[]`, newest first |
 | PATCH | `/admin/orders/{order_id}/status` | `{ order_stat }` | `OrderWithItems`; cancelling puts the stock back |
-| GET | `/admin/reviews` | – | `ProductReviews`, includes hidden reviews |
-| PATCH | `/admin/reviews/{review_id}` | `{ is_hidden }` | 501 for now, needs the `is_hidden` column (SCHEMA_GAPS #1) |
+| GET | `/admin/reviews` | – | `AdminReviews`: `ProductReviews` + `pendingReplies`, `hiddenCount`; includes hidden reviews |
+| PATCH | `/admin/reviews/{review_id}` | `{ is_hidden?, is_featured? }` | `ReviewWithMeta` |
+| POST | `/admin/reviews/{review_id}/reply` | `{ reply }` | `ReviewWithMeta` |
+| GET | `/admin/settings` | – | `{ store, policies, regional, security }` |
+
+## Super Admin only (403 for regular admins)
+
+| Method | Path | Body / query | Returns |
+|---|---|---|---|
+| GET | `/admin/admins` | – | admins and super admins with `last_active` and `deactivated_at` |
+| POST | `/admin/admins` | `{ full_name, email, password, role }` | the new account |
+| PATCH | `/admin/admins/{user_id}/role` | `{ role }` | the account (not your own) |
+| POST | `/admin/admins/{user_id}/password` | `{ password }` | 204 |
+| POST | `/admin/admins/{user_id}/deactivate` | – | the account; bans the login. Super Admins and yourself can't be deactivated |
+| POST | `/admin/admins/{user_id}/reactivate` | – | the account |
+| PUT | `/admin/settings/store` / `policies` / `regional` / `security` | that section's fields | the saved section |
+| POST | `/admin/settings/force-logout` | – | every admin login from before now gets 401, including yours |
+| GET | `/admin/audit-logs` | `admin` (user_id), `action` (`products` / `orders` / `reviews` / `admins` / `settings`), `page`, `page_size` | `{ total, rows }` |
 
 ```jsonc
 // ProductInput: product fields + variants. Variants with prod_var_id are updated, without are created,
@@ -158,20 +188,22 @@ When placing an order the backend should:
                  "pr_price": null, "pr_start": null, "pr_end": null, "stocks": 7, "is_avail": true, "images": "..." }] }
 
 // DashboardSummary (days are Asia/Manila, cancelled orders not counted in sales)
-{ "salesToday": 23200, "ordersToday": 3, "pendingOrders": 5, "lowStockCount": 9,
-  "last7Days": [{ "day": "2026-10-07", "total": 27900 }],   // 7 items, oldest first
+{ "salesToday": 23200, "ordersToday": 3, "lowStockCount": 9, "avgRating": 4.5, "reviewCount": 12,
+  // 7d: one bar per day + tomorrow's forecast; 30d: 4 weeks + week 5 forecast (straight-line trend)
+  "chart": [{ "label": "Mon", "total": 27900, "forecast": false }, { "label": "Tue", "total": 31000, "forecast": true }],
   "recentOrders": [ /* OrderWithItems, latest 6 */ ] }
 
-// ProductReviews
+// ProductReviews (store side leaves hidden reviews out and lists featured ones first)
 { "summary": { "average": 4.3, "count": 17, "breakdown": { "1": 0, "2": 1, "3": 1, "4": 7, "5": 8 } },
-  "reviews": [{ "review_id": 1, "user_id": "...", "prod_var_id": 1, "rating": 5, "content": "...",
-                "reviewer_name": "Maria Santos", "product_id": 1, "product_name": "2P Sofa LB01", "prod_attr": "Brown" }] }
+  "reviews": [{ "review_id": 1, "user_id": "...", "prod_var_id": 1, "rating": 5, "content": "...", "created_at": "...",
+                "photos": "https://...,https://...", "reply": "Thank you!", "replied_at": "...", "is_featured": true, "is_hidden": false,
+                "reviewer_name": "Maria Santos", "product_id": 1, "product_name": "2P Sofa LB01", "prod_attr": "Brown",
+                "product_images": "...", "item_categ_id": 1, "item_category": "Living Room" }] }
 ```
 
 ## Not saved yet (waiting on SCHEMA_GAPS)
 
 - `note` in `PlaceOrderInput` is accepted but not stored (#2)
 - GCash payment status (#2)
-- Hide review, review date (#1)
 
 The frontend reads these as optional `_temp_` fields, so nothing breaks while they're missing.

@@ -2,15 +2,15 @@ import uuid
 from datetime import timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from psycopg import errors
 
-from .. import queries
+from .. import audit, queries
 from ..config import IMAGE_BUCKET, LOW_STOCK_LIMIT, TIMEZONE
 from ..db import Db
-from ..deps import require_admin
+from ..deps import require_admin, require_super_admin
 from ..pricing import today
-from ..schemas import OrderStatusIn, ProductIn
+from ..schemas import ArchiveIn, OrderStatusIn, ProductIn
 from ..supa import admin_client
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -18,44 +18,67 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(requir
 
 # ---------- dashboard ----------
 
+def forecast_next(values: list[float]) -> float:
+    # straight line through the actual sales (least squares), continued one step. Never below zero.
+    n = len(values)
+    if n < 2:
+        return values[0] if values else 0
+    mean_x, mean_y = (n - 1) / 2, sum(values) / n
+    slope_den = sum((i - mean_x) ** 2 for i in range(n))
+    slope = sum((i - mean_x) * (v - mean_y) for i, v in enumerate(values)) / slope_den
+    return max(0.0, round(mean_y + slope * (n - mean_x), 2))
+
+
 @router.get("/dashboard")
-def dashboard(db: Db):
+def dashboard(db: Db, period: Literal["7d", "30d"] = Query("7d", alias="range")):
     day = today()
-    start = day - timedelta(days=6)
+    days = 7 if period == "7d" else 28
+    start = day - timedelta(days=days - 1)
 
     # sales per day in PH time, cancelled orders don't count
     rows = db.execute(
         """
-        select (placed_at at time zone %s)::date as day, sum(total_amt) as total, count(*) as orders
+        select (placed_at at time zone %s)::date as day, sum(total_amt) as total
         from "order"
         where order_stat <> 'Cancelled' and (placed_at at time zone %s)::date between %s and %s
         group by 1
         """,
         (TIMEZONE, TIMEZONE, start, day),
     ).fetchall()
-    by_day = {r["day"]: r for r in rows}
+    by_day = {r["day"]: float(r["total"]) for r in rows}
+    daily = [by_day.get(start + timedelta(days=i), 0.0) for i in range(days)]
 
-    last7 = []
-    for i in range(7):
-        d = start + timedelta(days=i)
-        last7.append({"day": d.isoformat(), "total": by_day[d]["total"] if d in by_day else 0})
+    if period == "7d":
+        labels = [(start + timedelta(days=i)).strftime("%a") for i in range(days)]
+        actual = daily
+        next_label = (day + timedelta(days=1)).strftime("%a")
+    else:
+        # 4 weeks ending today, then the forecast for week 5
+        labels = [f"Week {w + 1}" for w in range(4)]
+        actual = [sum(daily[w * 7 : w * 7 + 7]) for w in range(4)]
+        next_label = "Week 5"
+
+    chart = [{"label": label, "total": total, "forecast": False} for label, total in zip(labels, actual)]
+    chart.append({"label": next_label, "total": forecast_next(actual), "forecast": True})
 
     counts = db.execute(
         """
         select
           (select count(*) from "order" where (placed_at at time zone %s)::date = %s) as orders_today,
-          (select count(*) from "order" where order_stat = 'Pending') as pending,
-          (select count(*) from prod_var where stocks <= %s) as low_stock
+          (select count(*) from prod_var v join product p using (product_id) where p.is_avail and v.stocks <= %s) as low_stock,
+          (select round(avg(rating), 1) from review where not is_hidden) as avg_rating,
+          (select count(*) from review where not is_hidden) as review_count
         """,
         (TIMEZONE, day, LOW_STOCK_LIMIT),
     ).fetchone()
 
     return {
-        "salesToday": by_day[day]["total"] if day in by_day else 0,
+        "salesToday": by_day.get(day, 0),
         "ordersToday": counts["orders_today"],
-        "pendingOrders": counts["pending"],
         "lowStockCount": counts["low_stock"],
-        "last7Days": last7,
+        "avgRating": float(counts["avg_rating"] or 0),
+        "reviewCount": counts["review_count"],
+        "chart": chart,
         "recentOrders": queries.orders_with_items(db)[:6],
     }
 
@@ -123,39 +146,53 @@ def save_product(db, product_id: int | None, body: ProductIn) -> int:
 
 
 @router.post("/products")
-def create_product(db: Db, body: ProductIn):
+def create_product(db: Db, request: Request, body: ProductIn, user=Depends(require_admin)):
     try:
         product_id = save_product(db, None, body)
     except errors.UniqueViolation:
         raise HTTPException(400, "That SKU is already used by another product")
     except errors.ForeignKeyViolation:
         raise HTTPException(400, "Please pick a valid category")
+    audit.log(db, request, user, f"Added product: {body.product_name.strip()}")
     return queries.product_or_404(db, product_id)
 
 
 @router.put("/products/{product_id}")
-def update_product(db: Db, product_id: int, body: ProductIn):
-    queries.product_or_404(db, product_id)
+def update_product(db: Db, request: Request, product_id: int, body: ProductIn, user=Depends(require_admin)):
+    before = queries.product_or_404(db, product_id)
     try:
         save_product(db, product_id, body)
     except errors.UniqueViolation:
         raise HTTPException(400, "That SKU is already used by another product")
     except errors.ForeignKeyViolation:
         raise HTTPException(400, "Please pick a valid category")
+
+    # e.g. "Updated product: Slim Shoe Rack (+10 stock)"
+    change = sum(v.stocks for v in body.variants) - sum(v["stocks"] for v in before["variants"])
+    audit.log(db, request, user, f"Updated product: {body.product_name.strip()}" + (f" ({change:+d} stock)" if change else ""))
+    return queries.product_or_404(db, product_id)
+
+
+@router.patch("/products/{product_id}/archive")
+def archive_product(db: Db, request: Request, product_id: int, body: ArchiveIn, user=Depends(require_admin)):
+    # archived = is_avail false: hidden from the store, still in old orders, can be restored
+    product = queries.product_or_404(db, product_id)
+    db.execute("update product set is_avail = %s where product_id = %s", (not body.archived, product_id))
+    audit.log(db, request, user, f"{'Archived' if body.archived else 'Restored'} product: {product['product_name']}")
     return queries.product_or_404(db, product_id)
 
 
 @router.delete("/products/{product_id}", status_code=204)
-def delete_product(db: Db, product_id: int):
+def delete_product(db: Db, request: Request, product_id: int, user=Depends(require_super_admin)):
     # variants, cart and wishlist rows go with it; old orders keep their item_name / item_price
-    deleted = db.execute("delete from product where product_id = %s", (product_id,))
-    if deleted.rowcount == 0:
-        raise HTTPException(404, "Product not found")
+    product = queries.product_or_404(db, product_id)
+    db.execute("delete from product where product_id = %s", (product_id,))
+    audit.log(db, request, user, f"Deleted product: {product['product_name']}")
     return Response(status_code=204)
 
 
-@router.post("/uploads")
-async def upload_image(file: UploadFile = File(...)):
+async def store_image(file: UploadFile, folder: str = "") -> str:
+    # also used for customer review photos (routers/reviews.py)
     if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
         raise HTTPException(400, "Please upload a JPG, PNG or WEBP image")
     data = await file.read()
@@ -163,13 +200,18 @@ async def upload_image(file: UploadFile = File(...)):
         raise HTTPException(400, "Image must be 5 MB or smaller")
 
     ext = file.content_type.split("/")[1].replace("jpeg", "jpg")
-    path = f"{uuid.uuid4().hex}.{ext}"
+    path = f"{folder}{uuid.uuid4().hex}.{ext}"
     bucket = admin_client().storage.from_(IMAGE_BUCKET)
     try:
         bucket.upload(path, data, {"content-type": file.content_type})
     except Exception:
         raise HTTPException(500, "Upload failed, please try again")
-    return {"url": bucket.get_public_url(path)}
+    return bucket.get_public_url(path)
+
+
+@router.post("/uploads")
+async def upload_image(file: UploadFile = File(...)):
+    return {"url": await store_image(file)}
 
 
 # ---------- orders ----------
@@ -191,8 +233,8 @@ def all_orders(
 
 
 @router.patch("/orders/{order_id}/status")
-def update_status(db: Db, order_id: int, body: OrderStatusIn):
-    order = db.execute('select order_stat from "order" where order_id = %s for update', (order_id,)).fetchone()
+def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, user=Depends(require_admin)):
+    order = db.execute('select order_stat, order_num from "order" where order_id = %s for update', (order_id,)).fetchone()
     if not order:
         raise HTTPException(404, "Order not found")
     if order["order_stat"] == "Cancelled" and body.order_stat != "Cancelled":
@@ -209,4 +251,6 @@ def update_status(db: Db, order_id: int, body: OrderStatusIn):
         )
 
     db.execute('update "order" set order_stat = %s where order_id = %s', (body.order_stat, order_id))
+    if body.order_stat != order["order_stat"]:
+        audit.log(db, request, user, f"Changed order status: #{order['order_num']} to {body.order_stat}")
     return queries.order_or_404(db, order_id)

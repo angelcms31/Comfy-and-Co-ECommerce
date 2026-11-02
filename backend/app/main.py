@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import DATABASE_URL, FRONTEND_URLS
 from .db import pool
-from .routers import admin, auth, cart, catalog, orders, reviews, users, wishlist
+from .routers import admin, admins, auth, cart, catalog, orders, reviews, settings, users, wishlist
 
 
 @asynccontextmanager
@@ -29,8 +29,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (auth, catalog, cart, wishlist, orders, users, admin, reviews):
+for r in (auth, catalog, cart, wishlist, orders, users, admin, admins, reviews, settings):
     app.include_router(r.router, prefix="/api")
+app.include_router(reviews.customer_router, prefix="/api")
 
 
 @app.get("/api/health")

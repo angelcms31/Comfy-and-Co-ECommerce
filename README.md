@@ -19,8 +19,8 @@ On Windows, tick **"Add Python to PATH"** when installing Python.
 ### 2. Get the code
 
 ```bash
-git clone https://github.com/angelcms31/Comfy-and-Co-ECommerce.git
-cd Comfy-and-Co-ECommerce
+git clone https://github.com/angelcms31/Comfy-and-Co-Web.git
+cd Comfy-and-Co-Web
 ```
 
 ### 3. Add `backend/.env`
@@ -103,6 +103,7 @@ frontend/                  React app
 backend/                   FastAPI
   app/routers/             API endpoints
   supabase/schema.sql      tables from the ERD
+  supabase/migrations/     changes on top of the ERD (002 = admin panel), run after schema.sql
   supabase/seed.sql        sample data + demo accounts
   API_CONTRACT.md          list of endpoints
 SCHEMA_GAPS.md             things the ERD is missing

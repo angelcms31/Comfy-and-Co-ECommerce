@@ -1,5 +1,6 @@
 -- Comfy&Co tables, following the ERD.
--- Run this first in the Supabase SQL Editor, then seed.sql.
+-- Run this first in the Supabase SQL Editor, then the files in migrations/ in order, then seed.sql.
+-- migrations/002_admin_panel.sql adds what the admin panel needs on top of the ERD (super_admin role, audit_log, ...).
 --
 -- "user" and "order" are reserved words in Postgres, so they always need double quotes.
 

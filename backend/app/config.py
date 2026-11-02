@@ -17,3 +17,22 @@ LOW_STOCK_LIMIT = 5
 DELIVERY_FEE = 100  # standard delivery, store pickup is free
 COURIERS = ["J&T Express", "LBC", "Flash Express", "Ninja Van"]
 TIMEZONE = "Asia/Manila"
+
+# Settings page (store_setting table): used until a Super Admin saves their own values
+SETTING_DEFAULTS = {
+    "store": {
+        "name": "comfy&co",
+        "support_email": "comfyandco@gmail.com",
+        "phone": "+63 912 345 6789",
+        "address": "General Luna cor. Muralla St, Intramuros, Manila, 1002 Metro Manila",
+        "hours": "Mon–Sat, 9AM–6PM",
+    },
+    "policies": {
+        "cancellation_window": "Before the order ships",
+        "return_policy": "7-Day Return & Refund Window",
+        "refund_method": "Original Payment Method",
+        "free_shipping_threshold": 0,
+    },
+    "regional": {"currency": "PHP", "vat_percent": 12, "timezone": TIMEZONE},
+    "security": {"require_2fa": False, "inactivity_minutes": 30, "sessions_valid_after": None},
+}
