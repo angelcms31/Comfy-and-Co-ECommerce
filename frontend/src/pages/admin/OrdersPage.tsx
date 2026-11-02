@@ -141,6 +141,7 @@ export default function OrdersPage() {
   const [saving, setSaving] = useState<number | null>(null);
 
   const all = orders.data ?? [];
+  const count = (s: OrderStat) => all.filter((o) => o.order_stat === s).length;
   const refundRequests = all.filter((o) => o.refund?.refund_stat === 'Requested').length;
 
   const rows = useMemo(() => {

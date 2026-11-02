@@ -199,6 +199,7 @@ export default function MyOrdersPage() {
   const [q, setQ] = useState('');
   const [cancelling, setCancelling] = useState<OrderWithItems | null>(null);
   const [reviewing, setReviewing] = useState<OrderWithItems | null>(null);
+  const [reason, setReason] = useState(CANCEL_REASONS[0]);
   const [refunding, setRefunding] = useState<OrderWithItems | null>(null);
   const [refundReason, setRefundReason] = useState(REFUND_REASONS[0]);
   const [refundDetails, setRefundDetails] = useState('');
