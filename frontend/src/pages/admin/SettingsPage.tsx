@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Plus, RotateCcw } from 'lucide-react';
+import { KeyRound, Lock, Plus, RotateCcw, UserCog, UserX } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Input, { Select } from '@/components/ui/Input';
@@ -46,7 +46,7 @@ const initials = (name: string | null) =>
 function RoleBadge({ role }: { role: AdminRoleName | null }) {
   if (!role) return null;
   return (
-    <span className={cn('rounded-md px-2 py-0.5 text-[11px] font-semibold', role === 'super_admin' ? 'bg-forest text-white' : 'bg-mint-light text-forest')}>
+    <span className={cn('inline-block whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-semibold', role === 'super_admin' ? 'bg-forest text-white' : 'bg-mint-light text-forest')}>
       {ROLE_LABEL[role]}
     </span>
   );
@@ -222,6 +222,7 @@ function UserManagement({ settings, addOpen, setAddOpen }: { settings: ReturnTyp
   };
 
   const link = 'font-medium hover:underline';
+  const iconBtn = 'grid size-8 place-items-center rounded-md transition-colors';
   const columns: Column<AdminAccount>[] = [
     {
       key: 'name',
@@ -240,9 +241,9 @@ function UserManagement({ settings, addOpen, setAddOpen }: { settings: ReturnTyp
       header: 'Status',
       render: (a) =>
         a.deactivated_at ? (
-          <span className="text-xs text-muted">○ Deactivated</span>
+          <span className="whitespace-nowrap text-xs text-muted">○ Deactivated</span>
         ) : (
-          <span className="text-xs font-medium text-forest-light">● Active</span>
+          <span className="whitespace-nowrap text-xs font-medium text-forest-light">● Active</span>
         ),
     },
     {
@@ -263,27 +264,36 @@ function UserManagement({ settings, addOpen, setAddOpen }: { settings: ReturnTyp
             </button>
           );
         return (
-          <span className="flex flex-wrap gap-3 text-sm">
+          <span className="flex items-center gap-1">
             <button
               onClick={() => {
                 setNewRole(a.role);
                 setEditingRole(a);
               }}
-              className={cn(link, 'text-ink')}
+              title="Edit role"
+              aria-label={`Edit role of ${a.full_name}`}
+              className={cn(iconBtn, 'text-ink hover:bg-cream')}
             >
-              Edit Role
+              <UserCog className="size-4" />
             </button>
             <button
               onClick={() => {
                 setNewPassword('');
                 setResetting(a);
               }}
-              className={cn(link, 'text-ink')}
+              title="Reset password"
+              aria-label={`Reset password of ${a.full_name}`}
+              className={cn(iconBtn, 'text-ink hover:bg-cream')}
             >
-              Reset Pass
+              <KeyRound className="size-4" />
             </button>
-            <button onClick={() => setDeactivating(a)} className={cn(link, 'text-coral-dark')}>
-              Deactivate
+            <button
+              onClick={() => setDeactivating(a)}
+              title="Deactivate"
+              aria-label={`Deactivate ${a.full_name}`}
+              className={cn(iconBtn, 'text-coral-dark hover:bg-coral-dark/10')}
+            >
+              <UserX className="size-4" />
             </button>
           </span>
         );
