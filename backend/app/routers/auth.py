@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from datetime import timedelta
+from zoneinfo import ZoneInfo
 
+from fastapi import APIRouter, Depends, HTTPException, Response
 from .. import queries
+from ..config import DELETE_AFTER_DAYS, TIMEZONE
 from ..db import Db
 from ..deps import current_user
 from ..schemas import EmailIn, LoginIn, RegisterIn, ResetPasswordIn, VerifyCodeIn
@@ -9,12 +12,20 @@ from ..supa import admin_client, public_client
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def deactivated_message(db, email: str) -> str:
+    row = db.execute('select deactivated_at from "user" where lower(email) = lower(%s)', (email,)).fetchone()
+    if not row or not row["deactivated_at"]:
+        return "This account has been deactivated"
+    day = (row["deactivated_at"] + timedelta(days=DELETE_AFTER_DAYS)).astimezone(ZoneInfo(TIMEZONE))
+    return f"This account was deactivated and will be permanently deleted on {day:%B} {day.day}, {day.year}. Contact us to restore it."
+
+
 def session_for(db, email: str, password: str) -> dict:
     try:
         res = public_client().auth.sign_in_with_password({"email": email, "password": password})
     except Exception as e:
         if "banned" in str(e).lower():
-            raise HTTPException(403, "This account has been deactivated")
+            raise HTTPException(403, deactivated_message(db, email))
         raise HTTPException(401, "Incorrect email or password")
 
     user = queries.profile(db, res.user.id)
