@@ -38,6 +38,14 @@ export const authService = {
     }
   },
 
+  // sign up: the code from the email finishes the account and logs them in
+  async verifyEmail(email: string, code: string) {
+    const session = await http<Session>('/auth/verify-email', { method: 'POST', body: { email, code } });
+    saveSession(session);
+    return session;
+  },
+  resendVerification: (email: string) => http<void>('/auth/resend-verification', { method: 'POST', body: { email } }),
+
   // forgot password: send code -> verify code (gives a reset_token) -> set new password
   sendResetCode: (email: string) => http<void>('/auth/forgot-password', { method: 'POST', body: { email } }),
   verifyResetCode: (email: string, code: string) =>
