@@ -35,9 +35,9 @@ def patch_me(db: Db, body: ProfilePatch, user=Depends(current_user)):
     return queries.profile(db, user["user_id"])
 
 
-# no is_active column, so the Supabase Auth login is banned instead. Their orders and reviews stay.
+# the Supabase Auth login is banned, and deactivated_at starts the 30 days before app/cleanup.py deletes the account
 @router.post("/me/deactivate", status_code=204)
-def deactivate_me(user=Depends(current_user)):
+def deactivate_me(db: Db, user=Depends(current_user)):
     if user["role"] in ADMIN_ROLES:
         raise HTTPException(400, "Admin accounts can't be deactivated here")
     try:
@@ -46,4 +46,5 @@ def deactivate_me(user=Depends(current_user)):
     except Exception:
         log.exception("deactivate failed for %s", user["user_id"])
         raise HTTPException(500, "Could not deactivate the account, please try again")
+    db.execute('update "user" set deactivated_at = now() where user_id = %s', (user["user_id"],))
     return Response(status_code=204)

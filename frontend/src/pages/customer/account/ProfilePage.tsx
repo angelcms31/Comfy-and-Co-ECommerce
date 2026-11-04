@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserX } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { ACCOUNT_DELETE_DAYS } from '@/lib/constants';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Input from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
@@ -109,7 +110,7 @@ export default function ProfilePage() {
         confirmLabel="Yes, deactivate"
         onCancel={() => setConfirmOpen(false)}
         onConfirm={deactivate}
-        message="You'll be logged out and won't be able to log in again with this email. Your past orders stay on record. To use it again, please contact us."
+        message={`You'll be logged out right away. Your account and personal details will be permanently deleted after ${ACCOUNT_DELETE_DAYS} days. Contact us before then if you change your mind. Your past orders stay on record.`}
       />
     </div>
   );

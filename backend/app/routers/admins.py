@@ -29,7 +29,7 @@ def admin_or_404(db, user_id: str) -> dict:
         """
         select u.user_id, u.full_name, u.email, r.user_role as role, u.deactivated_at, u.date_added
         from "user" u join user_role r on r.user_role_id = u.user_role_id
-        where u.user_id = %s and r.user_role = any(%s)
+        where u.user_id = %s and r.user_role = any(%s) and u.deleted_at is null and u.deleted_at is null and u.deleted_at is null
         """,
         (user_id, list(ADMIN_ROLES)),
     ).fetchone()
@@ -53,7 +53,7 @@ def list_admins(db: Db):
         """
         select u.user_id, u.full_name, u.email, r.user_role as role, u.deactivated_at, u.date_added
         from "user" u join user_role r on r.user_role_id = u.user_role_id
-        where r.user_role = any(%s)
+        where r.user_role = any(%s) and u.deleted_at is null
         order by r.user_role desc, u.full_name
         """,
         (list(ADMIN_ROLES),),

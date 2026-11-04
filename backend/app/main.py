@@ -1,8 +1,10 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from . import cleanup
 from .config import DATABASE_URL, FRONTEND_URLS
 from .db import pool
 from .routers import admin, admins, auth, cart, catalog, orders, reviews, settings, users, wishlist
@@ -10,11 +12,16 @@ from .routers import admin, admins, auth, cart, catalog, orders, reviews, settin
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    cleanup_task = None
     if DATABASE_URL:
         pool.open()
+        # deletes accounts deactivated over 30 days ago, now and every few hours
+        cleanup_task = asyncio.create_task(cleanup.run_forever())
     else:
         print("WARNING: DATABASE_URL is missing in backend/.env, database requests will fail until it's set.")
     yield
+    if cleanup_task:
+        cleanup_task.cancel()
     if not pool.closed:
         pool.close()
 

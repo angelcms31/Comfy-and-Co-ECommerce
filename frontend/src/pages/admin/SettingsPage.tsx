@@ -16,6 +16,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { adminService } from '@/services/adminService';
 import { cn } from '@/lib/cn';
 import { formatDate, formatDateTime } from '@/lib/dates';
+import { ACCOUNT_DELETE_DAYS } from '@/lib/constants';
 import { ROLE_LABEL } from '@/lib/roles';
 import type { AdminAccount, AdminRoleName, AllSettings, AuditAction, AuditLogRow, NewAdminInput } from '@/types/admin';
 import AdminPageHeader from './AdminPageHeader';
@@ -241,7 +242,12 @@ function UserManagement({ settings, addOpen, setAddOpen }: { settings: ReturnTyp
       header: 'Status',
       render: (a) =>
         a.deactivated_at ? (
-          <span className="whitespace-nowrap text-xs text-muted">○ Deactivated</span>
+          <span className="text-xs text-muted">
+            <span className="whitespace-nowrap">○ Deactivated</span>
+            <span className="block whitespace-nowrap text-[11px] text-coral-dark">
+              Deletes {formatDate(new Date(Date.parse(a.deactivated_at) + ACCOUNT_DELETE_DAYS * 86400000).toISOString())}
+            </span>
+          </span>
         ) : (
           <span className="whitespace-nowrap text-xs font-medium text-forest-light">● Active</span>
         ),
@@ -421,7 +427,8 @@ function UserManagement({ settings, addOpen, setAddOpen }: { settings: ReturnTyp
         onConfirm={() => deactivating && run(() => adminService.deactivate(deactivating.user_id), `${deactivating.full_name} was deactivated`)}
         message={
           <>
-            <strong className="text-ink">{deactivating?.full_name}</strong> will be logged out and can't log in until you reactivate the account.
+            <strong className="text-ink">{deactivating?.full_name}</strong> will be logged out and can't log in until you reactivate the account. If it's not reactivated within{' '}
+            {ACCOUNT_DELETE_DAYS} days, it will be deleted for good.
           </>
         }
       />
