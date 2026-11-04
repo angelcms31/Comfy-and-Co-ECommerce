@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Archive, Armchair, BedDouble, ChevronRight, LampDesk, Sofa, Utensils, X, type LucideIcon } from 'lucide-react';
+import { Archive, Armchair, BedDouble, LampDesk, Sofa, Utensils, type LucideIcon } from 'lucide-react';
 import Button, { ButtonLink } from '@/components/ui/Button';
 import ProductGrid from '@/components/ui/ProductGrid';
 import { ErrorState } from '@/components/ui/States';
@@ -130,82 +130,8 @@ function Categories({ products }: { products: ProductsState }) {
     const Icon = ROOM_ICONS.find(([word]) => name.toLowerCase().includes(word))?.[1] ?? Armchair;
     return <Icon className={cn(size, 'text-forest/70')} strokeWidth={1.5} />;
   };
-  // subcategory names of a category with how many products each has
-  const subsOf = (categId: number) => {
-    const counts = new Map<string, number>();
-    for (const p of products.data ?? []) {
-      if (p.item_categ_id === categId && p._temp_subcategory) counts.set(p._temp_subcategory, (counts.get(p._temp_subcategory) ?? 0) + 1);
-    }
-    return [...counts];
-  };
 
-  // clicking a category opens its panel in place of the row, the X goes back
-  const [openId, setOpenId] = useState<number | null>(null);
-  const open = categories.data?.find((c) => c.item_categ_id === openId);
-
-  if (open) {
-    const subs = subsOf(open.item_categ_id);
-    const image = imageFor(open.item_categ_id);
-    const all = `/products?category=${open.item_categ_id}`;
-    return (
-      <section id="categories" className="checker-butter scroll-mt-28 py-14 sm:py-20">
-        <div className="container-page max-w-3xl">
-          <div className="relative mb-8">
-            <h2 className="text-center text-4xl font-semibold text-forest sm:text-5xl">our categories</h2>
-            <button
-              onClick={() => setOpenId(null)}
-              aria-label="Back to all categories"
-              className="absolute right-0 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-mint text-forest hover:bg-mint-light"
-            >
-              <X className="size-5" />
-            </button>
-          </div>
-
-          <div className="grid animate-pop-in gap-4 sm:grid-cols-[1fr_1.4fr]">
-            <div className="overflow-hidden rounded-card border border-ink/25 bg-white">
-              <div className="grid h-48 place-items-center bg-mint-light p-4 sm:h-56">
-                {image ? <img src={image} alt="" className="size-full object-contain" /> : iconFor(open.item_category, 'size-20')}
-              </div>
-              <div className="p-4">
-                <p className="font-display text-2xl font-semibold text-forest">{open.item_category.toLowerCase()}</p>
-                <p className="text-xs text-muted">
-                  {subs.length} subcategor{subs.length === 1 ? 'y' : 'ies'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-col rounded-card border border-ink/25 bg-white p-4">
-              {subs.length ? (
-                <ul className="flex-1 divide-y divide-line">
-                  {subs.map(([name, count]) => (
-                    <li key={name}>
-                      <Link
-                        to={`${all}&sub=${encodeURIComponent(name)}`}
-                        className="flex items-center justify-between gap-2 py-2.5 text-sm text-ink hover:text-forest"
-                      >
-                        <span>
-                          {name} <span className="text-xs text-muted">({count})</span>
-                        </span>
-                        <ChevronRight className="size-4 text-muted" />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="grid flex-1 place-items-center py-8 text-center text-sm text-muted">
-                  No products in this category yet. Check back soon!
-                </p>
-              )}
-              <ButtonLink to={all} size="sm" className="mt-4 self-start px-5">
-                View all {open.item_category.toLowerCase()}
-              </ButtonLink>
-            </div>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
+  // clicking a category goes straight to all its products
   return (
     <section id="categories" className="checker-butter scroll-mt-28 py-14 sm:py-20">
       <div className="container-page">
@@ -218,29 +144,28 @@ function Categories({ products }: { products: ProductsState }) {
               <div key={r} className="flex flex-wrap justify-center gap-x-6 gap-y-10 sm:gap-x-14">
                 {row.map((c, i) =>
                   c ? (
-                    <button
+                    <Link
                       key={c.item_categ_id}
-                      type="button"
-                      onClick={() => setOpenId(c.item_categ_id)}
-                      className="group flex w-32 flex-col items-center gap-3 sm:w-44"
+                      to={`/products?category=${c.item_categ_id}`}
+                      className="group flex w-40 flex-col items-center gap-3 sm:w-56"
                     >
                       {imageFor(c.item_categ_id) ? (
                         // photos have a white background, multiply blends it into the checker pattern
                         <img
                           src={imageFor(c.item_categ_id)!}
                           alt=""
-                          className="h-28 w-full object-contain mix-blend-multiply transition-transform group-hover:-translate-y-1 sm:h-36"
+                          className="h-36 w-full object-contain mix-blend-multiply transition-transform group-hover:-translate-y-1 sm:h-48"
                         />
                       ) : (
-                        <span className="grid h-28 w-full place-items-center transition-transform group-hover:-translate-y-1 sm:h-36">
-                          {iconFor(c.item_category, 'size-20 sm:size-24')}
+                        <span className="grid h-36 w-full place-items-center transition-transform group-hover:-translate-y-1 sm:h-48">
+                          {iconFor(c.item_category, 'size-24 sm:size-32')}
                         </span>
                       )}
-                      <span className="font-display text-lg text-forest group-hover:underline sm:text-xl">{c.item_category.toLowerCase()}</span>
-                    </button>
+                      <span className="font-display text-xl text-forest group-hover:underline sm:text-2xl">{c.item_category.toLowerCase()}</span>
+                    </Link>
                   ) : (
-                    <div key={i} className="flex w-32 flex-col items-center gap-3 sm:w-44">
-                      <div className="h-28 w-full skeleton rounded-xl sm:h-36" />
+                    <div key={i} className="flex w-40 flex-col items-center gap-3 sm:w-56">
+                      <div className="h-36 w-full skeleton rounded-xl sm:h-48" />
                       <div className="h-5 w-24 skeleton rounded" />
                     </div>
                   ),
