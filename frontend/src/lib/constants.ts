@@ -11,6 +11,9 @@ export const COLLECTIONS = [
 // home page "our categories": which product's photo stands for each category (category name -> product_id).
 // Categories not listed here use their first product with a photo.
 export const CATEGORY_PHOTOS: Record<string, number> = {
+  Bedroom: 47, // Scandinavian Oak Queen Bed
+  'Living Room': 11, // Modern Track-Arm Sofa
+  'Home Office': 105, // Ergonomic Mesh Chair with Adjustable Armrests
   'Room Storage': 27, // Tall 5-Drawer Tri-Tone Wooden High Chest
   'Kitchen Dining': 24, // Middle Brown Oak Veneer Dining Board with Wine Rack and Rattan Door
 };

@@ -150,11 +150,10 @@ function Categories({ products }: { products: ProductsState }) {
                       className="group flex w-40 flex-col items-center gap-3 sm:w-56"
                     >
                       {imageFor(c.item_categ_id) ? (
-                        // photos have a white background, multiply blends it into the checker pattern
                         <img
                           src={imageFor(c.item_categ_id)!}
                           alt=""
-                          className="h-36 w-full object-contain mix-blend-multiply transition-transform group-hover:-translate-y-1 sm:h-48"
+                          className="h-36 w-full object-contain transition-transform group-hover:-translate-y-1 sm:h-48"
                         />
                       ) : (
                         <span className="grid h-36 w-full place-items-center transition-transform group-hover:-translate-y-1 sm:h-48">
@@ -179,8 +178,11 @@ function Categories({ products }: { products: ProductsState }) {
   );
 }
 
+const COLLECTION_STEP = 6; // products shown at first, and added by each "see more"
+
 function Collections() {
   const [tab, setTab] = useState<Collection>('all');
+  const [visible, setVisible] = useState(COLLECTION_STEP);
   const { data, loading, error, reload } = useAsync(() => productService.getAll({ collection: tab }), [tab]);
 
   return (
@@ -192,7 +194,10 @@ function Collections() {
             key={c.value}
             role="tab"
             aria-selected={tab === c.value}
-            onClick={() => setTab(c.value)}
+            onClick={() => {
+              setTab(c.value);
+              setVisible(COLLECTION_STEP);
+            }}
             className={cn(
               'rounded-full px-5 py-1.5 text-sm font-medium transition-colors',
               tab === c.value ? 'bg-mint text-forest' : 'bg-forest text-white hover:bg-forest-light',
@@ -203,12 +208,12 @@ function Collections() {
         ))}
       </div>
       <div className="mx-auto max-w-4xl">
-        <ProductGrid products={data?.slice(0, 6) ?? null} loading={loading} error={error} onRetry={reload} />
-        {data && data.length > 0 && (
+        <ProductGrid products={data?.slice(0, visible) ?? null} loading={loading} error={error} onRetry={reload} />
+        {data && data.length > visible && (
           <div className="mt-8 flex justify-center">
-            <ButtonLink to={`/products?collection=${tab}`} variant="outline" className="min-w-40">
+            <Button variant="outline" className="min-w-40" onClick={() => setVisible((v) => v + COLLECTION_STEP)}>
               see more
-            </ButtonLink>
+            </Button>
           </div>
         )}
       </div>
