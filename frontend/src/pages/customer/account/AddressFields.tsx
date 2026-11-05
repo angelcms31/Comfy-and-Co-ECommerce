@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import Input, { Select } from '@/components/ui/Input';
 import { useAsync } from '@/hooks/useAsync';
+import { cleanMobile, isValidMobile, MOBILE_ERROR, normalizeMobile } from '@/lib/mobile';
 import { locationService } from '@/services/locationService';
 import type { UserProfile } from '@/types/models';
 
@@ -26,17 +27,11 @@ export const contactFromUser = (u: UserProfile): ContactForm => ({
   country_id: u.city ? String(u.city.country_id) : '',
 });
 
-// accepts 09171234567, 0917 123 4567 or +63 917 123 4567, saved as 09171234567
-export function normalizeMobile(mobile: string) {
-  const digits = mobile.replace(/[\s-]/g, '');
-  return digits.startsWith('+63') ? `0${digits.slice(3)}` : digits;
-}
-
 export function validateContact(f: ContactForm, requireAddress: boolean): ContactErrors {
   const e: ContactErrors = {};
   if (!f.full_name.trim()) e.full_name = 'Please enter your name';
   if (f.mobile_no.trim() || requireAddress) {
-    if (!/^09\d{9}$/.test(normalizeMobile(f.mobile_no))) e.mobile_no = 'Use a number like 0917 123 4567';
+    if (!isValidMobile(f.mobile_no)) e.mobile_no = MOBILE_ERROR;
   }
   const anyAddress = f.st_add.trim() || f.postal.trim() || f.city_id;
   if (requireAddress || anyAddress) {
@@ -79,10 +74,11 @@ export function NameMobileFields({ form, errors, onChange, required, disabled }:
       <Input
         label={<>Mobile Number{req(required)}</>}
         type="tel"
+        inputMode="numeric"
         autoComplete="tel"
-        placeholder="0917 123 4567"
+        placeholder="09171234567"
         value={form.mobile_no}
-        onChange={(e) => onChange({ mobile_no: e.target.value })}
+        onChange={(e) => onChange({ mobile_no: cleanMobile(e.target.value) })}
         error={errors.mobile_no}
         disabled={disabled}
       />

@@ -5,6 +5,7 @@ import Input from '@/components/ui/Input';
 import PasswordInput from '@/components/ui/PasswordInput';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
+import { cleanMobile, isValidMobile, MOBILE_ERROR, normalizeMobile } from '@/lib/mobile';
 import { authService } from '@/services/authService';
 import AuthCard from './AuthCard';
 
@@ -16,12 +17,13 @@ let draft: Form | null = null;
 const POLICY_PAGES = ['/terms', '/privacy'];
 
 const today = () => new Date().toISOString().slice(0, 10);
+const optional = <em className="font-normal text-muted">(optional)</em>;
 
 function validate(f: Form) {
   const e: Partial<Record<keyof Form, string>> = {};
   if (!f.full_name.trim()) e.full_name = 'Please enter your name';
   if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) e.email = 'Please enter a valid email';
-  if (f.mobile_no && !/^09\d{9}$/.test(f.mobile_no.replace(/[\s-]/g, ''))) e.mobile_no = 'Use an 11-digit number like 09171234567';
+  if (f.mobile_no && !isValidMobile(f.mobile_no)) e.mobile_no = MOBILE_ERROR;
   if (f.birthdate && f.birthdate >= today()) e.birthdate = 'Birthdate must be in the past';
   if (f.password.length < 8) e.password = 'Use at least 8 characters';
   if (f.confirm !== f.password) e.confirm = "Passwords don't match";
@@ -66,7 +68,7 @@ export default function RegisterPage() {
         full_name: form.full_name.trim(),
         email: form.email.trim(),
         password: form.password,
-        mobile_no: form.mobile_no.replace(/[\s-]/g, '') || undefined,
+        mobile_no: form.mobile_no ? normalizeMobile(form.mobile_no) : undefined,
         birthdate: form.birthdate || undefined,
       });
       signIn(session);
@@ -95,17 +97,17 @@ export default function RegisterPage() {
           />
 
           <Input
-            label="Mobile number"
+            label={<>Mobile number {optional}</>}
             type="tel"
+            inputMode="numeric"
             autoComplete="tel"
-            placeholder="09XXXXXXXXX"
+            placeholder="09171234567"
             value={form.mobile_no}
-            onChange={set('mobile_no')}
+            onChange={(e) => setForm((f) => ({ ...f, mobile_no: cleanMobile(e.target.value) }))}
             filled
             error={errors.mobile_no}
-            hint="Optional"
           />
-          <Input label="Birthdate" type="date" max={today()} value={form.birthdate} onChange={set('birthdate')} filled error={errors.birthdate} hint="Optional" />
+          <Input label={<>Birthdate {optional}</>} type="date" max={today()} value={form.birthdate} onChange={set('birthdate')} filled error={errors.birthdate} />
           <PasswordInput
             label="Password"
             autoComplete="new-password"
