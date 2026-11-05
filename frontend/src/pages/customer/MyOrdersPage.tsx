@@ -211,6 +211,7 @@ export default function MyOrdersPage() {
   const [cancelling, setCancelling] = useState<OrderWithItems | null>(null);
   const [reviewing, setReviewing] = useState<OrderWithItems | null>(null);
   const [reason, setReason] = useState(CANCEL_REASONS[0]);
+  const [otherReason, setOtherReason] = useState('');
   const [refunding, setRefunding] = useState<OrderWithItems | null>(null);
   const [refundReason, setRefundReason] = useState(REFUND_REASONS[0]);
   const [refundDetails, setRefundDetails] = useState('');
@@ -304,6 +305,7 @@ export default function MyOrdersPage() {
               order={o}
               onCancel={() => {
                 setReason(CANCEL_REASONS[0]);
+                setOtherReason('');
                 setCancelling(o);
               }}
               onReceived={() => run(() => orderService.markReceived(o.order_id), 'Thanks! Your order is marked as received.')}
@@ -329,18 +331,27 @@ export default function MyOrdersPage() {
             <Button variant="ghost" onClick={() => setCancelling(null)} disabled={busy}>
               Keep order
             </Button>
-            <Button variant="danger" loading={busy} onClick={() => cancelling && run(() => orderService.cancel(cancelling.order_id, reason), 'Your order was cancelled.')}>
+            <Button
+              variant="danger"
+              loading={busy}
+              disabled={reason === 'Other' && !otherReason.trim()}
+              onClick={() => cancelling && run(() => orderService.cancel(cancelling.order_id, reason === 'Other' ? otherReason.trim() : reason), 'Your order was cancelled.')}>
               Cancel order
             </Button>
           </>
         }
       >
         <p className="mb-4 text-sm text-muted">Order #{cancelling?.order_num} will be cancelled and can't be undone.</p>
-        <Select label="Reason" value={reason} onChange={(e) => setReason(e.target.value)}>
-          {CANCEL_REASONS.map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </Select>
+        <div className="space-y-4">
+          <Select label="Reason" value={reason} onChange={(e) => setReason(e.target.value)}>
+            {CANCEL_REASONS.map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </Select>
+          {reason === 'Other' && (
+            <Textarea label="Please tell us why" rows={3} maxLength={200} value={otherReason} onChange={(e) => setOtherReason(e.target.value)} />
+          )}
+        </div>
       </Modal>
 
       <Modal

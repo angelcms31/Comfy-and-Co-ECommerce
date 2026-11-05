@@ -90,7 +90,9 @@ export default function CheckoutPage() {
   }
 
   const hasAddress = !!(user.mobile_no && user.st_add && user.postal && user.city_id);
-  const fee = fulfillment === 'delivery' ? DELIVERY_FEE : 0;
+  // the delivery fee only shows once there's a courier
+  const needsCourier = fulfillment === 'delivery' && !courier;
+  const fee = fulfillment === 'delivery' && courier ? DELIVERY_FEE : 0;
   const subtotal = linesTotal(lines);
   const count = itemCount(lines);
   const address = [user.st_add, user.city?.city, user.postal, user.city?.country.country].filter(Boolean).join(', ');
@@ -234,7 +236,7 @@ export default function CheckoutPage() {
             </div>
             <div className="flex justify-between">
               <dt>Delivery Fee</dt>
-              <dd>{fee ? formatPeso(fee) : 'Free'}</dd>
+              <dd className={needsCourier ? 'text-muted' : undefined}>{needsCourier ? 'Select a courier' : fee ? formatPeso(fee) : 'Free'}</dd>
             </div>
             <div className="flex justify-between border-t border-line pt-3 text-lg font-semibold">
               <dt className="font-display text-forest">Total Amount</dt>
