@@ -14,6 +14,7 @@ import DashboardPage from '@/pages/admin/DashboardPage';
 import InventoryPage from '@/pages/admin/InventoryPage';
 import AdminOrdersPage from '@/pages/admin/OrdersPage';
 import AdminReviewsPage from '@/pages/admin/ReviewsPage';
+import AdminMessagesPage from '@/pages/admin/MessagesPage';
 import SettingsPage from '@/pages/admin/SettingsPage';
 import HomePage from '@/pages/customer/HomePage';
 import ProductListPage from '@/pages/customer/ProductListPage';
@@ -22,13 +23,13 @@ import WishlistPage from '@/pages/customer/WishlistPage';
 import CartPage from '@/pages/customer/CartPage';
 import CheckoutPage from '@/pages/customer/CheckoutPage';
 import OrderConfirmationPage from '@/pages/customer/OrderConfirmationPage';
+import GcashPaymentPage from '@/pages/customer/GcashPaymentPage';
 import MyOrdersPage from '@/pages/customer/MyOrdersPage';
 import ProfilePage from '@/pages/customer/account/ProfilePage';
 import ShippingPage from '@/pages/customer/account/ShippingPage';
 import AboutPage from '@/pages/customer/AboutPage';
 import ContactPage from '@/pages/customer/ContactPage';
 import PolicyPage from '@/pages/customer/PolicyPage';
-import Placeholder from '@/pages/Placeholder';
 import NotFound from '@/pages/NotFound';
 
 // providers sit inside the router because the wishlist uses navigate()
@@ -64,7 +65,7 @@ export const router = createBrowserRouter([
           { path: '/checkout', element: <RequireLogin><CheckoutPage /></RequireLogin> },
           { path: '/checkout/shipping', element: <RequireLogin><ShippingPage /></RequireLogin> },
           { path: '/profile', element: <RequireLogin><ProfilePage /></RequireLogin> },
-          { path: '/checkout/gcash/:orderId', element: <Placeholder title="GCash payment" phase={3} /> },
+          { path: '/checkout/gcash/:orderId', element: <RequireLogin><GcashPaymentPage /></RequireLogin> },
           { path: '/orders', element: <RequireLogin><MyOrdersPage /></RequireLogin> },
           { path: '/orders/:orderId', element: <RequireLogin><OrderConfirmationPage /></RequireLogin> },
 
@@ -88,6 +89,7 @@ export const router = createBrowserRouter([
           { path: 'inventory', element: <InventoryPage /> },
           { path: 'orders', element: <AdminOrdersPage /> },
           { path: 'reviews', element: <AdminReviewsPage /> },
+          { path: 'messages', element: <AdminMessagesPage /> },
           { path: 'settings', element: <RequireAdmin superOnly><SettingsPage /></RequireAdmin> },
         ],
       },

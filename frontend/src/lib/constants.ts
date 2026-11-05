@@ -1,4 +1,8 @@
 export const LOW_STOCK_LIMIT = 5;
+
+// the store's GCash QR, from the GCash app, cropped to just the code so it's big enough to scan on the page
+export const GCASH_QR_IMAGE = '/images/gcash-qr.png';
+export const GCASH_ACCOUNT_NAME = 'AN**L L** C.'; // written the way GCash shows it, so customers can check they're paying the right account
 export const DAILY_SALES_TARGET = 50000;
 export const MAX_LOGIN_ATTEMPTS = 5;
 

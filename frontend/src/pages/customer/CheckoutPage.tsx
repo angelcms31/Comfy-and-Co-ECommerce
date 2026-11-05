@@ -114,7 +114,8 @@ export default function CheckoutPage() {
         courier: fulfillment === 'delivery' ? courier : undefined,
       });
       cart.reload(); // the backend took the ordered items out of the cart
-      navigate(`/orders/${order.order_id}`, { replace: true, state: { placed: true } });
+      if (payment === 'GCash') navigate(`/checkout/gcash/${order.order_id}`, { replace: true });
+      else navigate(`/orders/${order.order_id}`, { replace: true, state: { placed: true } });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not place your order');
       setPlacing(false);
