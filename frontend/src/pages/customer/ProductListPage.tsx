@@ -10,7 +10,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { productService } from '@/services/productService';
 import { categoryService } from '@/services/categoryService';
 import { cn } from '@/lib/cn';
-import { swatch } from '@/lib/colors';
+import { isColor, swatch } from '@/lib/colors';
 import type { Collection, ProductSort } from '@/types/models';
 
 const SORTS: { value: ProductSort | ''; label: string }[] = [
@@ -98,13 +98,13 @@ export default function ProductListPage() {
 
   const categoryName = categories.data?.find((c) => c.item_categ_id === categoryId)?.item_category;
   const collectionName = COLLECTIONS.find((c) => c.value === collection)?.label;
-  const subject = q ? `"${q}"` : sub ?? categoryName ?? (collection !== 'all' ? collectionName : 'home essentials');
+  const subject = q ? `"${q}"` : sub ?? categoryName ?? (collection !== 'all' ? collectionName : undefined);
   const hasFilters = !!(q || categoryId || collection !== 'all' || minPrice || maxPrice || color || sub);
 
   // subcategory and color aren't API filters, they're applied here to the products the API returned
   const inSub = (products.data ?? []).filter((p) => !sub || p._temp_subcategory === sub);
   const subs = categoryId ? [...new Set((products.data ?? []).map((p) => p._temp_subcategory).filter((s): s is string => !!s))].sort() : [];
-  const colors = [...new Set(inSub.flatMap((p) => p.variants.map((v) => v.prod_attr).filter(Boolean)))].sort();
+  const colors = [...new Set(inSub.flatMap((p) => p.variants.map((v) => v.prod_attr).filter((a) => a && isColor(a))))].sort();
   const shown = products.data && (color ? inSub.filter((p) => p.variants.some((v) => v.prod_attr === color)) : inSub);
 
   const filters = (
@@ -202,8 +202,8 @@ export default function ProductListPage() {
             <p className="text-sm text-muted">
               {shown ? (
                 <>
-                  Showing <span className="font-semibold text-ink">{shown.length}</span> result{shown.length === 1 ? '' : 's'} for{' '}
-                  <span className="font-semibold text-ink">{subject}</span>
+                  Showing <span className="font-semibold text-ink">{shown.length}</span> {subject ? `result${shown.length === 1 ? '' : 's'} for ` : `product${shown.length === 1 ? '' : 's'}`}
+                  {subject && <span className="font-semibold text-ink">{subject}</span>}
                 </>
               ) : (
                 'Loading products...'

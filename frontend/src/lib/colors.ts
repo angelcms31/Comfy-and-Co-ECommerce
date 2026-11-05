@@ -18,3 +18,7 @@ const SWATCHES: Record<string, string> = {
 };
 
 export const swatch = (color: string) => SWATCHES[color.trim().toLowerCase()] ?? '#bdbdbd';
+
+// prod_attr also holds bed sizes and "Standard" for items with no options, which don't belong in the color filter
+const NOT_COLORS = ['single', 'double', 'queen', 'king', 'standard'];
+export const isColor = (attr: string) => !NOT_COLORS.includes(attr.trim().toLowerCase());
