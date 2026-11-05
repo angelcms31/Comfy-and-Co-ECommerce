@@ -102,6 +102,13 @@ Each user has one `wishlist_col`. Create it on the first add. All return `Wishli
 | PATCH | `/users/me` | any of `{ full_name, birthdate, mobile_no, st_add, postal, city_id }` | `UserProfile` |
 | POST | `/users/me/deactivate` | – | 204, bans the login (SCHEMA_GAPS #19); admins get 400 |
 
+## Contact
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/contact` | `{ name, email, subject, message }`, subject is `order`, `refund`, `product` or `other` | `{ to }`, the inbox from `CONTACT_EMAIL_TO`; saved for the admin, then the frontend opens Gmail with the message and the customer presses Send. Up to 10 an hour per visitor or email |
+| GET | `/admin/messages` | – | The latest 200 messages, newest first (admin) |
+
 ## Orders
 
 | Method | Path | Body | Returns |
@@ -111,7 +118,8 @@ Each user has one `wishlist_col`. Create it on the first add. All return `Wishli
 | GET | `/orders/{order_id}` | – | `OrderWithItems` (only the owner or an admin). Each item also has `product_id`, `color` and `images` from its variant |
 | POST | `/orders/{order_id}/cancel` | `{ reason }` | `OrderWithItems`; only `Pending` orders, puts the stock back (SCHEMA_GAPS #20) |
 | POST | `/orders/{order_id}/received` | – | `OrderWithItems`; the customer confirms a `Shipped` order, it becomes `Delivered` |
-| POST | `/orders/{order_id}/gcash/confirm` | – | `OrderWithItems` (mock GCash; can't be marked paid until SCHEMA_GAPS #2) |
+| POST | `/orders/uploads` | image file | `{ url }`; a refund photo, up to 5 MB (any logged in customer) |
+| POST | `/orders/{order_id}/gcash/confirm` | `{ reference }` (13 digits) | `OrderWithItems`; the order's owner sends the reference number after scanning the store's QR, only while `Pending`. `_temp_payment_status` becomes `For verification` (SCHEMA_GAPS #2) |
 
 ```jsonc
 // PlaceOrderInput

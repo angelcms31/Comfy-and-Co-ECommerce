@@ -11,7 +11,7 @@ Fields the frontend reads that are not in the ERD start with `_temp_`, so they'r
 | # | Gap | What the frontend does for now | Possible fix |
 |---|-----|-------------------------------|--------------|
 | 1 | `review` has no field for **Hide Review** and no date | **Added:** `is_hidden` and `created_at` (see #26) | – |
-| 2 | `order` has no **checkout note** and no **payment status** (needed for GCash) | Sends `note` when placing an order, reads `_temp_note` and `_temp_payment_status` (`Unpaid` / `Paid`) | Add `note text` and `payment_stat text` |
+| 2 | `order` has no **checkout note** and no **payment status** (needed for GCash) | Sends `note` when placing an order, reads `_temp_note`. A GCash payment adds ` [GCash submitted\|paid\|rejected, ref <number>]` to the end of `shipping_add`, and the API sends it as `_temp_payment_status` (`Unpaid` / `For verification` / `Paid` / `Rejected`) and `_temp_payment_ref` | Add `note text` and `payment_stat text` |
 | 3 | `prod_var.images` is one field but the product page shows several images | Stored as comma-separated URLs. `parseImages()` in `frontend/src/lib/images.ts` accepts a string or an array | Change to `text[]`, or add a `prod_var_image` table |
 | 4 | No field for **failed login attempts** | The 5-attempt rule is kept in frontend state only, so a page refresh resets it | Count attempts on the backend, or rely on Supabase Auth rate limits |
 | 5 | `review` links to `prod_var_id`, but the product page shows reviews for the whole product | `GET /products/{id}/reviews` is expected to return reviews from all variants of the product | Fine as is, just needs the join on the backend |
@@ -36,7 +36,7 @@ Fields the frontend reads that are not in the ERD start with `_temp_`, so they'r
 | 18 | No fields for **fulfilment method** (Standard Delivery / Store Pickup), **courier**, or **delivery fee** on `order` | Checkout sends `fulfillment` and `courier`. The fee is added to `total_amt`, and the method + courier are written into `shipping_add`, e.g. "… (Standard Delivery via LBC)" or "Store pickup. …". Could add `fulfillment`, `courier` and `delivery_fee` columns |
 | 19 | No field to **deactivate an account** | `POST /users/me/deactivate` bans the login in Supabase Auth (`ban_duration`), so the `user` row, orders and reviews stay. Login then says "This account has been deactivated". To undo it, remove the ban in the Supabase dashboard. Could add `is_active boolean` |
 | 20 | No field for the **cancel reason** | `POST /orders/{id}/cancel` adds " [Cancelled by buyer: <reason>]" to the end of `shipping_add`, and Track Order reads it back. Could add `cancel_reason text` |
-| 21 | No **refund** status or table | The Refund tab on Track Order is always empty, and "Request Refund" opens Contact Us with the order number. Could add a `refund` table (order, amount, status, reference) |
+| 21 | No **refund** status or table | The Refund tab on Track Order is always empty, and "Request Refund" opens Contact Us with the order number. Could add a `refund` table (order, amount, status, reference). Photos are in `refund.photos`, comma separated URLs (`migrations/004_refund_photos.sql`). |
 | 22 | No **delivery tracking** data (courier GPS, shipped/delivered times) | The rider on the tracking map is placed by the order status and how long ago it was placed (see #10). Could add `shipped_at`, `delivered_at` and a tracking number |
 | 23 | No table for **Contact Us messages** | The form opens the customer's email app addressed to the store email. Could add a `message` table |
 
@@ -49,6 +49,7 @@ Fields the frontend reads that are not in the ERD start with `_temp_`, so they'r
 | 26 | `review` can't be **replied to, featured, or have photos** | `review.created_at`, `photos` (comma separated URLs), `reply`, `replied_at`, `is_featured`, `is_hidden` |
 | 27 | No **audit log** of what admins change | `audit_log` table: who, what, IP address, device, when |
 | 28 | No place for **store settings** (store info, policies, VAT, security) | `store_setting` table, one JSON value per section (`store`, `policies`, `regional`, `security`) |
+| 29 | No place for **Contact Us messages** | **Added:** `contact_message` table (`migrations/005_contact_messages.sql`). Saved for the admin Messages page, then the website opens Gmail with the message addressed to `CONTACT_EMAIL_TO` and the customer presses Send | – |
 
 Notes:
 - Archiving a product uses the existing `product.is_avail` (false = archived, hidden from the store).
