@@ -4,6 +4,7 @@ import { ChevronRight, Clock, PackageCheck, ReceiptText, Search, Store, Truck, X
 import Button, { ButtonLink } from '@/components/ui/Button';
 import { Select, Textarea } from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
+import PhotoPicker from '@/components/ui/PhotoPicker';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { useCart } from '@/context/CartContext';
@@ -47,6 +48,8 @@ function statusLine(order: OrderWithItems) {
   const { pickup, courier, cancelReason } = parseShipping(order.shipping_add);
   switch (orderTab(order)) {
     case 'to_pay':
+      if (order._temp_payment_status === 'For verification') return { icon: Clock, bold: 'Checking your payment.', text: "We'll prepare your order once it's confirmed." };
+      if (order._temp_payment_status === 'Rejected') return { icon: Clock, bold: 'Payment not confirmed.', text: 'Please check your reference number and send it again.' };
       return { icon: Clock, bold: 'Payment pending.', text: `Please complete payment before ${plusDays(order.placed_at, 1)}.` };
     case 'to_ship':
       return pickup
@@ -98,21 +101,29 @@ function OrderCard({
   };
 
   const actions = {
-    to_pay: (
-      <>
-        <Button variant="outline" size="sm" onClick={onCancel}>
-          Cancel Order
-        </Button>
-        <ButtonLink to={`/checkout/gcash/${order.order_id}`} size="sm">
-          Pay Now
+    to_pay:
+      order._temp_payment_status === 'For verification' ? (
+        <ButtonLink to={support} variant="outline" size="sm">
+          Contact Support
         </ButtonLink>
-      </>
-    ),
+      ) : (
+        <>
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            Cancel Order
+          </Button>
+          <ButtonLink to={`/checkout/gcash/${order.order_id}`} size="sm">
+            Pay Now
+          </ButtonLink>
+        </>
+      ),
     to_ship: (
       <>
-        <Button variant="outline" size="sm" onClick={onCancel}>
-          Cancel Order
-        </Button>
+        {/* a paid GCash order needs the store to send the money back, so it goes through support */}
+        {order._temp_payment_status !== 'Paid' && (
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            Cancel Order
+          </Button>
+        )}
         <ButtonLink to={support} size="sm">
           Contact Support
         </ButtonLink>
@@ -203,6 +214,10 @@ export default function MyOrdersPage() {
   const [refunding, setRefunding] = useState<OrderWithItems | null>(null);
   const [refundReason, setRefundReason] = useState(REFUND_REASONS[0]);
   const [refundDetails, setRefundDetails] = useState('');
+  const [refundPhotos, setRefundPhotos] = useState<string[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  // "Other" can be something a photo can't show, every other reason is about the item itself
+  const photoNeeded = refundReason !== 'Other';
   const [busy, setBusy] = useState(false);
 
   const needle = q.trim().toLowerCase();
@@ -296,6 +311,7 @@ export default function MyOrdersPage() {
               onRefund={() => {
                 setRefundReason(REFUND_REASONS[0]);
                 setRefundDetails('');
+                setRefundPhotos([]);
                 setRefunding(o);
               }}
             />
@@ -339,10 +355,10 @@ export default function MyOrdersPage() {
             </Button>
             <Button
               loading={busy}
-              disabled={refundReason === 'Other' && !refundDetails.trim()}
+              disabled={uploadingPhoto || (refundReason === 'Other' ? !refundDetails.trim() : !refundPhotos.length)}
               onClick={() =>
                 refunding &&
-                run(() => orderService.requestRefund(refunding.order_id, refundReason, refundDetails), 'Refund requested. We will review it soon.')
+                run(() => orderService.requestRefund(refunding.order_id, refundReason, refundDetails, refundPhotos), 'Refund requested. We will review it soon.')
               }
             >
               Send request
@@ -366,6 +382,13 @@ export default function MyOrdersPage() {
             value={refundDetails}
             onChange={(e) => setRefundDetails(e.target.value)}
             placeholder="e.g., The table leg was cracked when it arrived."
+          />
+          <PhotoPicker
+            label={photoNeeded ? 'Photos of the item (at least 1, up to 3)' : 'Photos (optional, up to 3)'}
+            photos={refundPhotos}
+            onChange={setRefundPhotos}
+            upload={orderService.uploadRefundPhoto}
+            onUploadingChange={setUploadingPhoto}
           />
         </div>
       </Modal>

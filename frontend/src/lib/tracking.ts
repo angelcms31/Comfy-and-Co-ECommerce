@@ -4,18 +4,17 @@ import { DELIVERY_DAYS } from './constants';
 export type LatLng = [number, number];
 
 // shipping_add is saved by the backend as "<address> (Standard Delivery via <courier>)" or "Store pickup. Customer address: <address>",
-// with " [Cancelled by buyer: <reason>]" added at the end when the customer cancels
+// with " [GCash submitted|paid|rejected, ref <number>]" added for a GCash payment and " [Cancelled by buyer: <reason>]" when the customer cancels
 export function parseShipping(shippingAdd: string) {
   const cancelReason = shippingAdd.match(/\s*\[Cancelled by buyer: (.+)\]$/)?.[1] ?? null;
-  const text = shippingAdd.replace(/\s*\[Cancelled by buyer: .+\]$/, '');
+  const text = shippingAdd.replace(/\s*\[Cancelled by buyer: .+\]$/, '').replace(/\s*\[GCash (submitted|paid|rejected), ref \d+\]$/, '');
   const pickup = text.startsWith('Store pickup');
   const courier = text.match(/\(Standard Delivery via (.+)\)$/)?.[1] ?? null;
   const address = text.replace(/^Store pickup\. Customer address: /, '').replace(/\s*\(Standard Delivery via .+\)$/, '');
   return { pickup, courier, address, cancelReason };
 }
 
-// the Track Order tabs. There's no payment status column (SCHEMA_GAPS #2), so every pending GCash order counts as "To pay"
-// and there's no refund status yet, so the Refund tab stays empty.
+// the Track Order tabs. A pending GCash order is "To pay" until it's paid.
 export const ORDER_TABS = [
   { key: 'all', label: 'All' },
   { key: 'to_pay', label: 'To Pay' },
@@ -27,11 +26,11 @@ export const ORDER_TABS = [
 ] as const;
 export type OrderTab = (typeof ORDER_TABS)[number]['key'];
 
-export function orderTab(order: Pick<OrderWithItems, 'order_stat' | 'payment_method' | 'refund'>): OrderTab {
+export function orderTab(order: Pick<OrderWithItems, 'order_stat' | 'payment_method' | 'refund' | '_temp_payment_status'>): OrderTab {
   if (order.refund) return 'refund';
   switch (order.order_stat) {
     case 'Pending':
-      return order.payment_method === 'GCash' ? 'to_pay' : 'to_ship';
+      return order.payment_method === 'GCash' && order._temp_payment_status !== 'Paid' ? 'to_pay' : 'to_ship';
     case 'Shipped':
       return 'to_receive';
     case 'Delivered':
@@ -39,6 +38,28 @@ export function orderTab(order: Pick<OrderWithItems, 'order_stat' | 'payment_met
     default:
       return 'cancelled';
   }
+}
+
+type PaymentFields = Pick<OrderWithItems, 'order_stat' | 'payment_method' | '_temp_payment_status' | '_temp_payment_ref'>;
+
+// how the payment reads on the order pages. Older GCash orders that already moved on have no payment record.
+export function paymentLabel(order: PaymentFields) {
+  if (order.payment_method === 'COD') return 'Cash on Delivery';
+  const ref = order._temp_payment_ref;
+  if (order._temp_payment_status === 'Paid') return `GCash · Paid (Ref. ${ref})`;
+  if (order._temp_payment_status === 'For verification') return `GCash · Checking payment (Ref. ${ref})`;
+  if (order.order_stat !== 'Pending') return 'GCash';
+  return order._temp_payment_status === 'Rejected' ? `GCash · Payment not confirmed (Ref. ${ref})` : 'GCash · Not paid yet';
+}
+
+// the customer can still scan the QR and send a reference number
+export function canPayGcash(order: PaymentFields) {
+  return (
+    order.payment_method === 'GCash' &&
+    order.order_stat === 'Pending' &&
+    order._temp_payment_status !== 'Paid' &&
+    order._temp_payment_status !== 'For verification'
+  );
 }
 
 // There's no courier GPS, so the rider's spot on the map is estimated from the order status and how long ago it was placed.

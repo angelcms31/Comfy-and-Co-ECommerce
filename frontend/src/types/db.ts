@@ -103,6 +103,7 @@ export interface Refund {
   order_id: number;
   reason: string;
   details: string | null;
+  photos: string | null; // comma separated URLs, like prod_var.images
   amount: number;
   refund_stat: RefundStat;
   requested_at: string;
@@ -110,7 +111,7 @@ export interface Refund {
 }
 
 export type PaymentMethod = 'GCash' | 'COD';
-export type PaymentStatus = 'Unpaid' | 'Paid';
+export type PaymentStatus = 'Unpaid' | 'For verification' | 'Paid' | 'Rejected';
 
 export interface Order {
   order_id: number;
@@ -125,6 +126,7 @@ export interface Order {
   placed_at: string;
   _temp_note?: string | null;
   _temp_payment_status?: PaymentStatus;
+  _temp_payment_ref?: string | null;
 }
 
 export interface OrderItem {

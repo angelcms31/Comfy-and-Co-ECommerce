@@ -10,7 +10,7 @@ import { orderService } from '@/services/orderService';
 import { DELIVERY_DAYS, STORE_ADDRESS } from '@/lib/constants';
 import { formatDate, formatDateTime } from '@/lib/dates';
 import { formatPeso } from '@/lib/pricing';
-import { deliveryProgress, parseShipping } from '@/lib/tracking';
+import { canPayGcash, deliveryProgress, parseShipping, paymentLabel } from '@/lib/tracking';
 import NotFound from '../NotFound';
 
 const STATUS_TEXT = {
@@ -132,19 +132,21 @@ export default function OrderConfirmationPage() {
           </div>
           <div className="flex justify-between">
             <dt className="text-muted">Payment</dt>
-            <dd>{order.payment_method === 'COD' ? 'Cash on Delivery' : 'GCash'}</dd>
+            <dd className="text-right">{paymentLabel(order)}</dd>
           </div>
           <div className="flex justify-between pt-2 text-lg font-semibold text-forest">
             <dt className="font-display">Total</dt>
             <dd>{formatPeso(order.total_amt)}</dd>
           </div>
         </dl>
-        {order.payment_method === 'GCash' && order.order_stat === 'Pending' && (
-          <p className="mt-3 text-xs text-muted">We'll text the GCash payment details to your mobile number.</p>
-        )}
 
-        <div className="mt-6 text-center">
-          <ButtonLink to="/products" size="lg" className="w-full sm:w-auto sm:px-10">
+        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+          {canPayGcash(order) && (
+            <ButtonLink to={`/checkout/gcash/${order.order_id}`} size="lg" className="w-full sm:w-auto sm:px-10">
+              Pay with GCash
+            </ButtonLink>
+          )}
+          <ButtonLink to="/products" size="lg" variant={canPayGcash(order) ? 'outline' : undefined} className="w-full sm:w-auto sm:px-10">
             Continue shopping
           </ButtonLink>
         </div>

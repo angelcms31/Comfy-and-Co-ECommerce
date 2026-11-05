@@ -12,8 +12,9 @@ import { useAsync } from '@/hooks/useAsync';
 import { orderService } from '@/services/orderService';
 import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/dates';
+import { parseImages } from '@/lib/images';
 import { formatPeso } from '@/lib/pricing';
-import { parseShipping } from '@/lib/tracking';
+import { parseShipping, paymentLabel } from '@/lib/tracking';
 import type { OrderStat, RefundStat } from '@/types/db';
 import type { OrderWithItems } from '@/types/models';
 import AdminPageHeader from './AdminPageHeader';
@@ -73,7 +74,19 @@ function exportCsv(orders: OrderWithItems[]) {
   URL.revokeObjectURL(a.href);
 }
 
-function OrderDetails({ order, onClose }: { order: OrderWithItems | null; onClose: () => void }) {
+function OrderDetails({
+  order,
+  onClose,
+  onPayment,
+  onShip,
+  saving,
+}: {
+  order: OrderWithItems | null;
+  onClose: () => void;
+  onPayment: (order: OrderWithItems, decision: 'confirm' | 'reject') => void;
+  onShip: (order: OrderWithItems) => void;
+  saving: boolean;
+}) {
   if (!order) return null;
   const { pickup, courier, address, cancelReason } = parseShipping(order.shipping_add);
   return (
@@ -97,7 +110,7 @@ function OrderDetails({ order, onClose }: { order: OrderWithItems | null; onClos
           <dt className="text-muted">Customer</dt>
           <dd>{order.customer_name}</dd>
           <dt className="text-muted">Payment</dt>
-          <dd>{order.payment_method === 'COD' ? 'Cash on Delivery' : 'GCash'}</dd>
+          <dd>{paymentLabel(order)}</dd>
           <dt className="text-muted">Fulfilment</dt>
           <dd>{pickup ? 'Store pickup' : `Standard Delivery${courier ? ` via ${courier}` : ''}`}</dd>
           <dt className="text-muted">{pickup ? 'Customer address' : 'Ship to'}</dt>
@@ -116,6 +129,18 @@ function OrderDetails({ order, onClose }: { order: OrderWithItems | null; onClos
                 {order.refund.reason}
                 {order.refund.details && <span className="mt-1 block whitespace-pre-line text-muted">{order.refund.details}</span>}
               </dd>
+              {parseImages(order.refund.photos).length > 0 && (
+                <>
+                  <dt className="text-muted">Refund photos</dt>
+                  <dd className="flex flex-wrap gap-2">
+                    {parseImages(order.refund.photos).map((src, i) => (
+                      <a key={src} href={src} target="_blank" rel="noreferrer" aria-label={`Open refund photo ${i + 1}`}>
+                        <img src={src} alt="" className="size-20 rounded-lg border border-line object-cover" />
+                      </a>
+                    ))}
+                  </dd>
+                </>
+              )}
             </>
           )}
           {cancelReason && (
@@ -127,6 +152,29 @@ function OrderDetails({ order, onClose }: { order: OrderWithItems | null; onClos
           <dt className="font-semibold text-forest">Total</dt>
           <dd className="font-semibold text-forest">{formatPeso(order.total_amt)}</dd>
         </dl>
+        {order._temp_payment_status === 'For verification' && order.order_stat === 'Pending' && (
+          <div className="rounded-xl bg-pending p-3 text-pending-text">
+            <p className="font-medium">
+              Check the store's GCash app for reference no. {order._temp_payment_ref} and {formatPeso(order.total_amt)}.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button size="sm" disabled={saving} onClick={() => onPayment(order, 'confirm')}>
+                Confirm payment
+              </Button>
+              <Button size="sm" variant="outline" disabled={saving} onClick={() => onPayment(order, 'reject')}>
+                Not found, reject
+              </Button>
+            </div>
+          </div>
+        )}
+        {order.payment_method === 'GCash' && order._temp_payment_status === 'Paid' && order.order_stat === 'Pending' && (
+          <div className="rounded-xl bg-mint p-3 text-forest">
+            <p className="font-medium">Payment confirmed. This order is ready to {pickup ? 'pick up' : 'ship'}.</p>
+            <Button size="sm" className="mt-3" loading={saving} onClick={() => onShip(order)}>
+              {pickup ? 'Mark as ready for pickup' : 'Mark as shipped'}
+            </Button>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -164,12 +212,26 @@ export default function OrdersPage() {
   const saveStatus = async (order: OrderWithItems, status: OrderStat) => {
     setSaving(order.order_id);
     try {
-      await orderService.updateStatus(order.order_id, status);
+      const updated = await orderService.updateStatus(order.order_id, status);
+      setViewing((v) => (v?.order_id === updated.order_id ? updated : v));
       toast.success(`#${order.order_num} is now ${status}`);
       setCancelling(null);
       orders.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not update the order');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const savePayment = async (order: OrderWithItems, decision: 'confirm' | 'reject') => {
+    setSaving(order.order_id);
+    try {
+      setViewing(await orderService.decideGcash(order.order_id, decision));
+      toast.success(`Payment for #${order.order_num} ${decision === 'confirm' ? 'confirmed' : 'rejected'}`);
+      orders.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update the payment');
     } finally {
       setSaving(null);
     }
@@ -200,9 +262,16 @@ export default function OrdersPage() {
       key: 'num',
       header: 'Order #',
       render: (o) => (
-        <button onClick={() => setViewing(o)} className="font-medium text-forest underline-offset-2 hover:underline">
-          #{o.order_num}
-        </button>
+        <span className="flex flex-wrap items-center gap-2">
+          <button onClick={() => setViewing(o)} className="font-medium text-forest underline-offset-2 hover:underline">
+            #{o.order_num}
+          </button>
+          {o._temp_payment_status === 'For verification' && o.order_stat === 'Pending' && (
+            <Button size="sm" className="cursor-pointer" onClick={() => setViewing(o)}>
+              Check payment
+            </Button>
+          )}
+        </span>
       ),
     },
     { key: 'customer', header: 'Customer', render: (o) => o.customer_name },
@@ -302,7 +371,7 @@ export default function OrdersPage() {
         )}
       </section>
 
-      <OrderDetails order={viewing} onClose={() => setViewing(null)} />
+      <OrderDetails order={viewing} onClose={() => setViewing(null)} onPayment={savePayment} onShip={(o) => saveStatus(o, 'Shipped')} saving={saving === viewing?.order_id} />
       <ConfirmDialog
         open={!!cancelling}
         title="Cancel this order?"
