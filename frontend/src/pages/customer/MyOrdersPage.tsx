@@ -279,7 +279,7 @@ export default function MyOrdersPage() {
                 ? "When you place an order, you'll be able to track it here."
                 : 'Orders with this status will show up here.'
           }
-          action={tab === 'all' && !needle && <ButtonLink to="/products">Start shopping</ButtonLink>}
+          action={!needle && <ButtonLink to="/products">Start shopping</ButtonLink>}
         />
       ) : (
         <ul className="mt-5 space-y-4">

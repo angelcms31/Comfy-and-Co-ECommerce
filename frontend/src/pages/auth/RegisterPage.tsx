@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -10,6 +10,10 @@ import AuthCard from './AuthCard';
 
 const EMPTY = { full_name: '', email: '', mobile_no: '', birthdate: '', password: '', confirm: '' };
 type Form = typeof EMPTY;
+
+// what was typed before opening the terms or privacy page. Only kept in memory, so it's gone after a reload.
+let draft: Form | null = null;
+const POLICY_PAGES = ['/terms', '/privacy'];
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -30,10 +34,21 @@ export default function RegisterPage() {
   const fromState = (useLocation().state as { from?: string } | null)?.from;
   const from = fromState && !fromState.startsWith('/admin') ? fromState : '/';
 
-  const [form, setForm] = useState<Form>(EMPTY);
+  const [form, setForm] = useState<Form>(() => draft ?? EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
   const toast = useToast();
   const [loading, setLoading] = useState(false);
+
+  const latest = useRef(form);
+  useEffect(() => {
+    latest.current = form;
+  }, [form]);
+  useEffect(
+    () => () => {
+      draft = POLICY_PAGES.includes(window.location.pathname) ? latest.current : null;
+    },
+    [],
+  );
 
   if (user) return <Navigate to={from} replace />;
 

@@ -1,3 +1,6 @@
+import { ArrowLeft } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+
 // Sample text for the school project, replace with the group's final wording.
 const pages = {
   terms: {
@@ -23,9 +26,19 @@ const pages = {
 
 export default function PolicyPage({ page }: { page: keyof typeof pages }) {
   const { title, sections } = pages[page];
+  const navigate = useNavigate();
+  // a page opened directly has nothing to go back to
+  const opened = useLocation().key === 'default';
   return (
-    <div className="container-page max-w-3xl py-12 sm:py-16">
-      <h1 className="text-4xl font-semibold text-forest">{title}</h1>
+    <div className="container-page max-w-3xl py-8 sm:py-12">
+      <button
+        type="button"
+        onClick={() => (opened ? navigate('/') : navigate(-1))}
+        className="inline-flex items-center gap-1 text-sm text-muted hover:text-forest"
+      >
+        <ArrowLeft className="size-4" /> Back
+      </button>
+      <h1 className="mt-4 text-4xl font-semibold text-forest">{title}</h1>
       <div className="mt-8 space-y-6">
         {sections.map(([heading, text]) => (
           <section key={heading}>
