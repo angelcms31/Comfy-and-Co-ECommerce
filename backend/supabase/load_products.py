@@ -4,8 +4,9 @@ Adds the products in products.json to Supabase, with their photos.
     python backend/supabase/load_products.py "<images folder>"            compress, upload and insert
     python backend/supabase/load_products.py "<images folder>" --dry-run  only compress, saves to --out to check the sizes
 
-Photos are matched to products by file name (e.g. "Compact Steel Slipper Rack - 1.png"),
-shrunk to 1000px WebP and uploaded to the IMAGE_BUCKET bucket.
+Photos are matched to products by file name (e.g. "Compact Steel Slipper Rack - 1.png" or
+"01_Metal Platform Single Bed_1.png"). A color at the end, like "..._1(Blue).png", puts the photo
+on that color's variant only. Photos are shrunk to 1000px WebP and uploaded to the IMAGE_BUCKET bucket.
 Products that already exist (same product_name) are skipped, so it's safe to run again.
 Needs backend/.env with SUPABASE_URL, SUPABASE_SERVICE_KEY and DATABASE_URL.
 """
@@ -48,12 +49,19 @@ def find_photos(folder: Path, name: str) -> list[Path]:
     for f in folder.rglob("*"):
         if f.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp"):
             continue
-        stem = norm(f.stem)
+        # leading "01_" is just the sheet's numbering
+        stem = norm(re.sub(r"^\d+_", "", f.stem))
         if stem.startswith(key):
             # number right after the name decides the order, no number goes first
             num = re.match(r"\d+", stem[len(key):])
             found.append((int(num.group()) if num else 0, f.name, f))
     return [f for _, _, f in sorted(found)]
+
+
+def photo_color(path: Path) -> str | None:
+    # "Blanket_1(Blue).png" -> "blue"
+    m = re.search(r"\(([^()]+)\)$", path.stem.strip())
+    return m.group(1).strip().lower() if m else None
 
 
 def compress(path: Path) -> bytes:
@@ -66,11 +74,24 @@ def compress(path: Path) -> bytes:
 
 
 def description(p: dict) -> str:
-    specs = [f"Size: {p['size']}"]
+    if p.get("sizes"):
+        specs = ["Sizes: " + ", ".join(f"{n} {v['size']}" for n, v in p["sizes"].items()), f"Color: {', '.join(p['colors'])}"]
+    elif p.get("size"):
+        specs = [f"Size: {p['size']}"]
+    else:
+        specs = []
     if p.get("weight"):
         specs.append(f"Weight: {p['weight']}")
-    specs.append(f"Material: {p['material']}")
-    return f"{p['description']} {'. '.join(specs)}."
+    if p.get("material"):
+        specs.append(f"Material: {p['material']}")
+    return f"{p['description']} {'. '.join(specs)}." if specs else p["description"]
+
+
+def variants(p: dict) -> list[tuple[str, int]]:
+    # one variant per size if the product has sizes, otherwise one per color
+    if p.get("sizes"):
+        return [(n, v["price"]) for n, v in p["sizes"].items()]
+    return [(c, p["price"]) for c in p["colors"]]
 
 
 def main():
@@ -115,7 +136,7 @@ def main():
                 (args.out / path).write_bytes(data)
             else:
                 bucket.upload(path, data, {"content-type": "image/webp", "upsert": "true"})
-                urls.append(bucket.get_public_url(path).rstrip("?"))
+                urls.append((bucket.get_public_url(path).rstrip("?"), photo_color(photo)))
             print(f"  {photo.stat().st_size / 1024 / 1024:6.1f} MB -> {len(data) / 1024:5.0f} KB  {photo.name}")
 
         if args.dry_run:
@@ -128,12 +149,13 @@ def main():
             "insert into product (item_categ_id, product_name, prod_desc) values (%s, %s, %s) returning product_id",
             (categ_id, p["name"], description(p)),
         ).fetchone()[0]
-        for color in p["colors"]:
+        for color, price in variants(p):
+            images = [u for u, c in urls if c in (None, color.lower())]
             sku = f"{SKU_PREFIX.get(p['category'], 'PRD')}-{i:03d}-{color_code(color)}"
             conn.execute(
                 "insert into prod_var (product_id, sku, prod_var_name, prod_attr, b_price, stocks, images)"
                 " values (%s, %s, %s, %s, %s, %s, %s)",
-                (product_id, sku, f"{p['name']} - {color}", color, p["price"], args.stock, ",".join(urls) or None),
+                (product_id, sku, f"{p['name']} - {color}", color, price, args.stock, ",".join(images) or None),
             )
         print(f"added, {len(photos)} photo(s)  {p['name']}")
         added += 1
