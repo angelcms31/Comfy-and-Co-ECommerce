@@ -11,8 +11,6 @@ import { userService } from '@/services/userService';
 import { toDay } from '@/lib/dates';
 import { AddressFields, contactFromUser, contactPatch, NameMobileFields, validateContact, type ContactErrors, type ContactForm } from './AddressFields';
 
-const star = <span className="text-coral-dark"> *</span>;
-
 export default function ProfilePage() {
   const { user, updateUser, logout } = useAuth();
   const toast = useToast();
@@ -28,18 +26,19 @@ export default function ProfilePage() {
   if (!user) return null; // RequireLogin handles this
 
   const onChange = (patch: Partial<ContactForm>) => setForm((f) => ({ ...f, ...patch }));
+  const changed = birthdate !== (user.birthdate ?? '') || JSON.stringify(contactPatch(form)) !== JSON.stringify(contactPatch(contactFromUser(user)));
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const found: typeof errors = validateContact(form, true);
-    if (!birthdate) found.birthdate = 'Please enter your birthdate';
-    else if (birthdate >= toDay()) found.birthdate = 'Birthdate must be in the past';
+    // mobile, birthdate and address are optional like on sign up, checkout asks for what it needs
+    const found: typeof errors = validateContact(form, false);
+    if (birthdate && birthdate >= toDay()) found.birthdate = 'Birthdate must be in the past';
     setErrors(found);
     if (Object.keys(found).length) return;
 
     setSaving(true);
     try {
-      updateUser(await userService.updateProfile({ ...contactPatch(form), birthdate }));
+      updateUser(await userService.updateProfile({ ...contactPatch(form), birthdate: birthdate || null }));
       toast.success('Your profile was saved.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not save your profile');
@@ -81,9 +80,9 @@ export default function ProfilePage() {
         </div>
 
         <div className="mt-6 space-y-4">
-          <NameMobileFields form={form} errors={errors} onChange={onChange} required disabled={saving} />
+          <NameMobileFields form={form} errors={errors} onChange={onChange} disabled={saving} />
           <Input
-            label={<>Birthdate{star}</>}
+            label="Birthdate"
             type="date"
             max={toDay()}
             value={birthdate}
@@ -91,13 +90,13 @@ export default function ProfilePage() {
             error={errors.birthdate}
             disabled={saving}
           />
-          <Input label={<>Email Address{star}</>} type="email" value={user.email} disabled hint="Your email is used to log in and can't be changed here." />
+          <Input label="Email Address" type="email" value={user.email} disabled hint="Your email is used to log in and can't be changed here." />
 
           <h2 className="pt-3 font-sans text-sm font-semibold text-ink">Address</h2>
-          <AddressFields form={form} errors={errors} onChange={onChange} required disabled={saving} />
+          <AddressFields form={form} errors={errors} onChange={onChange} disabled={saving} />
         </div>
 
-        <Button type="submit" size="lg" className="mt-8 w-full" loading={saving}>
+        <Button type="submit" size="lg" className="mt-8 w-full" loading={saving} disabled={!changed}>
           Save Changes
         </Button>
       </form>

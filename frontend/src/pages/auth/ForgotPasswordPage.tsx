@@ -136,7 +136,7 @@ export default function ForgotPasswordPage() {
             filled
             error={error}
           />
-          <Button type="submit" size="lg" className="w-full" loading={loading}>
+          <Button type="submit" size="lg" className="w-full" loading={loading} disabled={password.length < 8 || password !== confirm}>
             Save password
           </Button>
         </form>
