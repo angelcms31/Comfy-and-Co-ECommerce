@@ -28,7 +28,6 @@ export const COURIERS = ['J&T Express', 'LBC', 'Flash Express', 'Ninja Van'] as 
 export const DELIVERY_DAYS = [3, 5]; // shown as "Estimated Oct 13-15"
 export const STORE_ADDRESS = 'General Luna cor. Muralla St, Intramuros, Manila, 1002 Metro Manila';
 export const STORE_LOCATION: [number, number] = [14.58689, 120.97636]; // lat, lng of STORE_ADDRESS, where deliveries start on the tracking map
-export const STORE_MAP_URL = `https://www.google.com/maps?q=${STORE_LOCATION.join(',')}`;
 export const STORE_HOURS = 'Mon–Sat, 9AM–6PM';
 export const STORE_PHONE = '+63 912 345 6789';
 export const STORE_EMAIL = 'comfyandco@gmail.com';

@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Mail, MapPin, Map as MapIcon, Phone, Send } from 'lucide-react';
 import Button from '@/components/ui/Button';
@@ -7,7 +7,7 @@ import SocialIcons from '@/components/ui/SocialIcons';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { useStoreInfo } from '@/hooks/useStoreInfo';
-import { STORE_MAP_URL, STORE_SOCIAL } from '@/lib/constants';
+import { STORE_SOCIAL } from '@/lib/constants';
 import { contactService } from '@/services/contactService';
 
 const SUBJECTS = [
@@ -42,6 +42,10 @@ export default function ContactPage() {
     subject: params.get('subject') ?? (order ? 'order' : ''),
     message: order ? `Order #${order}: ` : '',
   });
+  // the account can finish loading after the page opens
+  useEffect(() => {
+    if (user) setForm((f) => ({ ...f, name: user.full_name, email: user.email }));
+  }, [user]);
   const [errors, setErrors] = useState<Partial<Record<keyof typeof form, string>>>({});
   const set = (key: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -88,7 +92,7 @@ export default function ContactPage() {
           <Info icon={<MapPin className="size-5" />} title="Located at">
             <p>{store.address}</p>
             <a
-              href={STORE_MAP_URL}
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store.address)}`}
               target="_blank"
               rel="noreferrer"
               className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-forest px-3 py-1 text-xs font-medium text-forest hover:bg-mint-light"
@@ -128,7 +132,7 @@ export default function ContactPage() {
           </p>
         )}
         <div className="space-y-4">
-          <Input label="Name" placeholder="e.g., Juan Dela Cruz" autoComplete="name" value={form.name} onChange={set('name')} error={errors.name} />
+          <Input label="Name" placeholder="e.g., Juan Dela Cruz" autoComplete="name" value={form.name} onChange={set('name')} error={errors.name} disabled={!!user} />
           <Input
             label="Email Address"
             type="email"
@@ -137,6 +141,7 @@ export default function ContactPage() {
             value={form.email}
             onChange={set('email')}
             error={errors.email}
+            disabled={!!user}
           />
           <Select label="What can we help you with?" value={form.subject} onChange={set('subject')} error={errors.subject}>
             <option value="" disabled>
