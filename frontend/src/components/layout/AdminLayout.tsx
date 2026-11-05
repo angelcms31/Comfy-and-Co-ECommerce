@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Menu, Package, Settings, ShoppingCart, Star, Store, X } from 'lucide-react';
+import { LayoutDashboard, Mail, Menu, Package, Settings, ShoppingCart, Star, Store, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { adminService } from '@/services/adminService';
@@ -14,6 +14,7 @@ const links = [
   { to: '/admin/inventory', label: 'Inventory', icon: Package },
   { to: '/admin/orders', label: 'Orders', icon: ShoppingCart },
   { to: '/admin/reviews', label: 'Reviews', icon: Star },
+  { to: '/admin/messages', label: 'Messages', icon: Mail },
 ];
 const settingsLink = { to: '/admin/settings', label: 'Settings', icon: Settings };
 

@@ -25,5 +25,8 @@ services:
       # the Vercel URL of the store, comma separated if there's more than one
       - key: FRONTEND_URLS
         sync: false
+      # the inbox that receives the Contact Us messages
+      - key: CONTACT_EMAIL_TO
+        sync: false
       - key: IMAGE_BUCKET
         value: products

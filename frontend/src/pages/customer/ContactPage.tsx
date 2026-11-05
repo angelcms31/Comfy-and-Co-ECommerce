@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { useStoreInfo } from '@/hooks/useStoreInfo';
 import { STORE_MAP_URL, STORE_SOCIAL } from '@/lib/constants';
+import { contactService } from '@/services/contactService';
 
 const SUBJECTS = [
   { value: 'order', label: 'Order or delivery concern' },
@@ -44,8 +45,9 @@ export default function ContactPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof typeof form, string>>>({});
   const set = (key: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  // there's no messages table yet, so this opens the customer's email app with everything filled in
-  const onSubmit = (e: FormEvent) => {
+  const [sending, setSending] = useState(false);
+
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const found: typeof errors = {};
     if (!form.name.trim()) found.name = 'Please enter your name';
@@ -55,10 +57,25 @@ export default function ContactPage() {
     setErrors(found);
     if (Object.keys(found).length) return;
 
-    const subject = SUBJECTS.find((s) => s.value === form.subject)?.label ?? 'Inquiry';
-    const body = `${form.message.trim()}\n\n— ${form.name.trim()} (${form.email.trim()})`;
-    window.location.href = `mailto:${store.support_email}?subject=${encodeURIComponent(`[Comfy&Co] ${subject}`)}&body=${encodeURIComponent(body)}`;
-    toast.info('Your email app opened with the message. Press send there to reach us.');
+    // opened right away because browsers block new tabs that only open after waiting for the server
+    const gmail = window.open('', '_blank');
+    if (gmail) gmail.opener = null;
+    setSending(true);
+    try {
+      const { to } = await contactService.send({ name: form.name.trim(), email: form.email.trim(), subject: form.subject, message: form.message.trim() });
+      const subject = SUBJECTS.find((s) => s.value === form.subject)?.label ?? 'Inquiry';
+      const body = `${form.message.trim()}\n\nFrom: ${form.name.trim()} (${form.email.trim()})`;
+      const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to ?? store.support_email)}&su=${encodeURIComponent(`[Comfy&Co] ${subject}`)}&body=${encodeURIComponent(body)}`;
+      if (gmail) gmail.location.href = url;
+      else window.location.href = url;
+      toast.info("Almost done! We've prepared your message in Gmail. Hit Send there to deliver it.");
+      setForm((f) => ({ ...f, subject: '', message: '' }));
+    } catch (err) {
+      gmail?.close();
+      toast.error(err instanceof Error ? err.message : 'Could not send your message');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -132,7 +149,7 @@ export default function ContactPage() {
             ))}
           </Select>
           <Textarea label="Message" placeholder="Tell us what's on your mind..." rows={4} value={form.message} onChange={set('message')} error={errors.message} />
-          <Button type="submit" size="lg" className="w-full">
+          <Button type="submit" size="lg" className="w-full" loading={sending}>
             Send message <Send className="size-4" />
           </Button>
         </div>

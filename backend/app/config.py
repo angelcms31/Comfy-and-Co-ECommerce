@@ -13,6 +13,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 FRONTEND_URLS = [u.strip() for u in os.getenv("FRONTEND_URLS", "http://localhost:5173").split(",") if u.strip()]
 
 IMAGE_BUCKET = os.getenv("IMAGE_BUCKET", "products")
+
+# the inbox Contact Us messages are addressed to. Without it they go to the store's support email.
+CONTACT_EMAIL_TO = os.getenv("CONTACT_EMAIL_TO", "")
 LOW_STOCK_LIMIT = 5
 DELETE_AFTER_DAYS = 30  # a deactivated account is deleted this many days later
 DELIVERY_FEE = 100  # standard delivery, store pickup is free
