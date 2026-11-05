@@ -21,6 +21,9 @@ const SORTS: { value: ProductSort | ''; label: string }[] = [
   { value: 'name', label: 'Name: A to Z' },
 ];
 
+// digits only, up to 99,999
+const priceDigits = (v: string) => v.replace(/\D/g, '').slice(0, 5);
+
 const toNumber = (v: string | null) => (v && !Number.isNaN(Number(v)) ? Number(v) : undefined);
 
 function FilterOption({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -92,7 +95,9 @@ export default function ProductListPage() {
 
   const applyPrice = (e: FormEvent) => {
     e.preventDefault();
-    update({ min: minInput, max: maxInput });
+    // typed the wrong way round, so they're swapped instead of showing nothing
+    const swap = minInput && maxInput && Number(minInput) > Number(maxInput);
+    update({ min: swap ? maxInput : minInput, max: swap ? minInput : maxInput });
     setFiltersOpen(false);
   };
 
@@ -143,9 +148,9 @@ export default function ProductListPage() {
       <form onSubmit={applyPrice}>
         <FilterHeading onClear={minPrice || maxPrice ? () => update({ min: undefined, max: undefined }) : undefined}>Price</FilterHeading>
         <div className="flex items-end gap-2">
-          <Input type="number" min={0} inputMode="numeric" label="Min" placeholder="₱0" value={minInput} onChange={(e) => setMinInput(e.target.value)} />
+          <Input inputMode="numeric" label="Min" placeholder="₱0" value={minInput} onChange={(e) => setMinInput(priceDigits(e.target.value))} />
           <span className="pb-3 text-muted">–</span>
-          <Input type="number" min={0} inputMode="numeric" label="Max" placeholder="₱99,999" value={maxInput} onChange={(e) => setMaxInput(e.target.value)} />
+          <Input inputMode="numeric" label="Max" placeholder="₱99,999" value={maxInput} onChange={(e) => setMaxInput(priceDigits(e.target.value))} />
         </div>
         <Button type="submit" variant="secondary" size="sm" className="mt-2 w-full">
           Apply
