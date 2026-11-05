@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Heart, Home, LogOut, Menu, Search, ShoppingCart, Store, User, X } from 'lucide-react';
 import Dropdown from '@/components/ui/Dropdown';
 import { categoryService } from '@/services/categoryService';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { isAdmin } from '@/lib/roles';
 import BottomNav, { BottomTab } from './BottomNav';
 import Logo from './Logo';
+import SearchBar from './SearchBar';
 
 // Track Order only shows when logged in
 const pageLinks = (loggedIn: boolean) => [
@@ -18,33 +19,6 @@ const pageLinks = (loggedIn: boolean) => [
   { to: '/contact', label: 'Contact Us' },
   ...(loggedIn ? [{ to: '/orders', label: 'Track Order' }] : []),
 ];
-
-function SearchBar({ className }: { className?: string }) {
-  const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const urlQ = params.get('q') ?? '';
-  const [q, setQ] = useState(urlQ);
-  useEffect(() => setQ(urlQ), [urlQ]);
-
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    navigate(q.trim() ? `/products?q=${encodeURIComponent(q.trim())}` : '/products');
-  };
-
-  return (
-    <form onSubmit={onSubmit} role="search" className={cn('relative', className)}>
-      <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted" />
-      <input
-        type="search"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="What product are you looking for?"
-        aria-label="Search products"
-        className="h-11 w-full rounded-full bg-white pl-11 pr-4 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-mint"
-      />
-    </form>
-  );
-}
 
 function IconLink({ to, label, badge, children }: { to: string; label: string; badge?: number; children: ReactNode }) {
   return (
