@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Heart } from 'lucide-react';
 import { wishlistService } from '@/services/wishlistService';
 import { useToast } from '@/components/ui/Toast';
 import type { WishlistLine } from '@/types/models';
@@ -65,10 +66,10 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
       try {
         if (existing) {
           setItems(await wishlistService.remove(existing.wishlist_item_id));
-          toast.info('Removed from Likes');
+          toast.success('Product removed from My Wishlist');
         } else {
           setItems(await wishlistService.add(prodVarId));
-          toast.success('Saved to Likes');
+          toast.success('Product saved to My Wishlist', <Heart className="size-7" fill="currentColor" />);
         }
       } catch (err) {
         toast.error(message(err));

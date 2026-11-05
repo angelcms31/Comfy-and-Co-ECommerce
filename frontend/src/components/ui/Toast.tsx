@@ -8,10 +8,11 @@ interface ToastItem {
   id: number;
   type: ToastType;
   message: string;
+  icon?: ReactNode;
 }
 
 interface ToastApi {
-  success: (message: string) => void;
+  success: (message: string, icon?: ReactNode) => void;
   error: (message: string) => void;
   info: (message: string) => void;
 }
@@ -26,7 +27,7 @@ const styles: Record<ToastType, { title: string; icon: ReactNode; circle: string
 
 // errors stay a bit longer, and long messages get enough time to be read
 function secondsOnScreen({ type, message }: ToastItem) {
-  return Math.max(type === 'error' ? 5 : 3, message.length * 0.06);
+  return Math.max(type === 'error' ? 3 : 1.5, message.length * 0.03);
 }
 
 let nextId = 1;
@@ -42,10 +43,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const show =useCallback((type: ToastType, message: string) => setToast({ id: nextId++, type, message }), []);
+  const show = useCallback((type: ToastType, message: string, icon?: ReactNode) => setToast({ id: nextId++, type, message, icon }), []);
 
   const [api] = useState<ToastApi>(() => ({
-    success: (m) => show('success', m),
+    success: (m, icon) => show('success', m, icon),
     error: (m) => show('error', m),
     info: (m) => show('info', m),
   }));
@@ -62,7 +63,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             role={toast.type === 'error' ? 'alert' : 'status'}
             className="relative w-full max-w-xs animate-pop-in overflow-hidden rounded-2xl bg-white px-6 py-6 text-center shadow-[0_12px_40px_rgb(29_43_38/0.25)] ring-1 ring-line"
           >
-            <div className={cn('mx-auto grid size-14 place-items-center rounded-full', s.circle)}>{s.icon}</div>
+            <div className={cn('mx-auto grid size-14 place-items-center rounded-full', s.circle)}>{toast.icon ?? s.icon}</div>
             <p className="mt-3 font-display text-xl font-semibold text-forest">{s.title}</p>
             <p className="mt-1 text-sm text-ink">{toast.message}</p>
           </div>
