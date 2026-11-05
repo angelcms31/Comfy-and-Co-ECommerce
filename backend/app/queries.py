@@ -1,5 +1,6 @@
 """Loads rows and joins them into the shapes the frontend expects (see frontend/src/types/models.ts)."""
 
+import re
 import json
 from functools import cache
 from pathlib import Path
@@ -88,6 +89,26 @@ def variants_with_product(db, prod_var_ids: list[int]) -> list[dict]:
     return rows
 
 
+# added to the end of shipping_add as a GCash payment moves along (SCHEMA_GAPS #2). A cancel reason can come after it.
+GCASH_TAG = re.compile(r" \[GCash (submitted|paid|rejected), ref (\d+)\](?: \[Cancelled by buyer: .+\])?$")
+GCASH_STATUS = {"submitted": "For verification", "paid": "Paid", "rejected": "Rejected"}
+
+
+def payment_status(shipping_add: str) -> tuple[str, str | None]:
+    tag = GCASH_TAG.search(shipping_add)
+    return (GCASH_STATUS[tag.group(1)], tag.group(2)) if tag else ("Unpaid", None)
+
+
+def set_gcash_tag(db, order_id: int, state: str, reference: str) -> None:
+    db.execute(
+        """
+        update "order" set shipping_add = regexp_replace(shipping_add, ' \\[GCash (submitted|rejected), ref \\d+\\]$', '') || %s
+        where order_id = %s
+        """,
+        (f" [GCash {state}, ref {reference}]", order_id),
+    )
+
+
 def orders_with_items(db, where: str = "", params: tuple = ()) -> list[dict]:
     orders = db.execute(
         f"""
@@ -113,6 +134,7 @@ def orders_with_items(db, where: str = "", params: tuple = ()) -> list[dict]:
     ).fetchall()
     for o in orders:
         o["items"] = [i for i in items if i["order_id"] == o["order_id"]]
+        o["_temp_payment_status"], o["_temp_payment_ref"] = payment_status(o["shipping_add"])
     return orders
 
 

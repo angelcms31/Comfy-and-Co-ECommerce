@@ -10,7 +10,7 @@ from ..config import IMAGE_BUCKET, LOW_STOCK_LIMIT, TIMEZONE
 from ..db import Db
 from ..deps import require_admin, require_super_admin
 from ..pricing import today
-from ..schemas import ArchiveIn, OrderStatusIn, ProductIn, RefundStatusIn
+from ..schemas import ArchiveIn, GcashDecisionIn, OrderStatusIn, ProductIn, RefundStatusIn
 from ..supa import admin_client
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -234,11 +234,20 @@ def all_orders(
 
 @router.patch("/orders/{order_id}/status")
 def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, user=Depends(require_admin)):
-    order = db.execute('select order_stat, order_num from "order" where order_id = %s for update', (order_id,)).fetchone()
+    order = db.execute(
+        'select order_stat, order_num, payment_method, shipping_add from "order" where order_id = %s for update', (order_id,)
+    ).fetchone()
     if not order:
         raise HTTPException(404, "Order not found")
     if order["order_stat"] == "Cancelled" and body.order_stat != "Cancelled":
         raise HTTPException(400, "A cancelled order can't be reopened")
+    if (
+        order["order_stat"] == "Pending"
+        and body.order_stat in ("Shipped", "Delivered")
+        and order["payment_method"] == "GCash"
+        and queries.payment_status(order["shipping_add"])[0] != "Paid"
+    ):
+        raise HTTPException(400, "Confirm the GCash payment before shipping this order")
 
     if body.order_stat == "Cancelled" and order["order_stat"] != "Cancelled":
         # put the stock back
@@ -253,6 +262,21 @@ def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, 
     db.execute('update "order" set order_stat = %s where order_id = %s', (body.order_stat, order_id))
     if body.order_stat != order["order_stat"]:
         audit.log(db, request, user, f"Changed order status: #{order['order_num']} to {body.order_stat}")
+    return queries.order_or_404(db, order_id)
+
+
+# an admin checks the reference number in the store's GCash app, the site can't see GCash
+@router.patch("/orders/{order_id}/payment")
+def decide_gcash(db: Db, request: Request, order_id: int, body: GcashDecisionIn, user=Depends(require_admin)):
+    order = db.execute('select order_stat, order_num, shipping_add from "order" where order_id = %s for update', (order_id,)).fetchone()
+    if not order:
+        raise HTTPException(404, "Order not found")
+    status, reference = queries.payment_status(order["shipping_add"])
+    if status != "For verification" or order["order_stat"] != "Pending":
+        raise HTTPException(400, "This order has no payment waiting to be checked")
+    queries.set_gcash_tag(db, order_id, "paid" if body.decision == "confirm" else "rejected", reference)
+    verb = "Confirmed" if body.decision == "confirm" else "Rejected"
+    audit.log(db, request, user, f"{verb} GCash payment: #{order['order_num']} (ref {reference})")
     return queries.order_or_404(db, order_id)
 
 

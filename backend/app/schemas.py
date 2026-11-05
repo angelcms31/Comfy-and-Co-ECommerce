@@ -75,6 +75,21 @@ class PlaceOrderIn(BaseModel):
     courier: str | None = None
 
 
+class ContactIn(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    subject: Literal["order", "refund", "product", "other"]
+    message: str = Field(min_length=1, max_length=5000)
+
+
+class GcashPaymentIn(BaseModel):
+    reference: str = Field(pattern=r"^\d{13}$")
+
+
+class GcashDecisionIn(BaseModel):
+    decision: Literal["confirm", "reject"]
+
+
 class CancelOrderIn(BaseModel):
     reason: str = Field(min_length=1, max_length=200)
 
@@ -87,6 +102,7 @@ class OrderStatusIn(BaseModel):
 class RefundIn(BaseModel):
     reason: str = Field(min_length=1, max_length=100)
     details: str | None = Field(default=None, max_length=1000)
+    photos: list[str] = Field(default_factory=list, max_length=3)
 
 
 class RefundStatusIn(BaseModel):

@@ -1,14 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from .. import queries
-from ..config import COURIERS, DELIVERY_FEE
+from ..config import COURIERS, DELIVERY_FEE, IMAGE_BUCKET
 from ..db import Db
 from ..deps import ADMIN_ROLES, current_user
 from ..pricing import effective_price
-from ..schemas import CancelOrderIn, PlaceOrderIn, RefundIn, RefundIn
+from ..schemas import CancelOrderIn, GcashPaymentIn, PlaceOrderIn, RefundIn
+from ..supa import admin_client
+from .admin import images_text, store_image
 from .users import update_profile
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+
+REFUND_PHOTO_FOLDER = "refunds/"
 
 
 def next_order_num(db) -> str:
@@ -126,6 +130,8 @@ def cancel_order(db: Db, order_id: int, body: CancelOrderIn, user=Depends(curren
     order = own_order(db, user, order_id)
     if order["order_stat"] != "Pending":
         raise HTTPException(400, "Only orders that haven't shipped yet can be cancelled")
+    if order["_temp_payment_status"] in ("Paid", "For verification"):
+        raise HTTPException(400, "This order has a GCash payment, please contact us to cancel it")
     db.execute(
         """
         update prod_var v set stocks = v.stocks + oi.quantity
@@ -150,6 +156,11 @@ def mark_received(db: Db, order_id: int, user=Depends(current_user)):
     return queries.order_or_404(db, order_id)
 
 
+@router.post("/uploads")
+async def upload_refund_photo(file: UploadFile = File(...), user=Depends(current_user)):
+    return {"url": await store_image(file, REFUND_PHOTO_FOLDER)}
+
+
 @router.post("/{order_id}/refund")
 def request_refund(db: Db, order_id: int, body: RefundIn, user=Depends(current_user)):
     order = own_order(db, user, order_id)
@@ -158,17 +169,38 @@ def request_refund(db: Db, order_id: int, body: RefundIn, user=Depends(current_u
     if order["refund"]:
         raise HTTPException(400, "A refund was already requested for this order")
     details = (body.details or "").strip() or None
+    # "Other" can be something a photo can't show, every other reason is about the item itself
+    if not body.photos and body.reason.strip() != "Other":
+        raise HTTPException(400, "Please add at least one photo of the item")
+    folder = admin_client().storage.from_(IMAGE_BUCKET).get_public_url(REFUND_PHOTO_FOLDER).rstrip("?")
+    if not all(p.startswith(folder) and "," not in p for p in body.photos):
+        raise HTTPException(400, "Please upload the photos again")
     db.execute(
-        "insert into refund (order_id, reason, details, amount) values (%s, %s, %s, %s)",
-        (order_id, body.reason.strip(), details, order["total_amt"]),
+        "insert into refund (order_id, reason, details, amount, photos) values (%s, %s, %s, %s, %s)",
+        (order_id, body.reason.strip(), details, order["total_amt"], images_text(body.photos)),
     )
     return queries.order_or_404(db, order_id)
 
 
 @router.post("/{order_id}/gcash/confirm")
-def confirm_gcash(db: Db, order_id: int, user=Depends(current_user)):
-    # GCash is only a mock screen. Marking it as paid needs a payment status column (SCHEMA_GAPS #2).
+def confirm_gcash(db: Db, order_id: int, body: GcashPaymentIn, user=Depends(current_user)):
+    # the customer paid by scanning the store's QR and sends the reference number, an admin then checks it in the GCash app
     order = own_order(db, user, order_id)
+    if order["user_id"] != user["user_id"]:
+        raise HTTPException(404, "Order not found")
     if order["payment_method"] != "GCash":
         raise HTTPException(400, "This order is not paid with GCash")
-    return order
+    if order["_temp_payment_status"] in ("Paid", "For verification"):
+        if order["_temp_payment_ref"] == body.reference:
+            return order
+        raise HTTPException(400, "We already have a reference number for this order")
+    if order["order_stat"] != "Pending":
+        raise HTTPException(400, "This order can't be paid anymore")
+    used = db.execute(
+        """select 1 from "order" where order_id <> %s and (shipping_add like %s or shipping_add like %s)""",
+        (order_id, f"%[GCash submitted, ref {body.reference}]%", f"%[GCash paid, ref {body.reference}]%"),
+    ).fetchone()
+    if used:
+        raise HTTPException(400, "This reference number was already used for another order")
+    queries.set_gcash_tag(db, order_id, "submitted", body.reference)
+    return queries.order_or_404(db, order_id)
