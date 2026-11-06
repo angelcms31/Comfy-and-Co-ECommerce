@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useAsync } from '@/hooks/useAsync';
 import { orderService } from '@/services/orderService';
 import { cn } from '@/lib/cn';
+import { downloadCsv } from '@/lib/csv';
 import { formatDateTime } from '@/lib/dates';
 import { parseImages } from '@/lib/images';
 import { formatPeso } from '@/lib/pricing';
@@ -18,6 +19,7 @@ import { parseShipping, paymentLabel } from '@/lib/tracking';
 import type { OrderStat, RefundStat } from '@/types/db';
 import type { OrderWithItems } from '@/types/models';
 import AdminPageHeader from './AdminPageHeader';
+import OrderItemsCell from './OrderItemsCell';
 import { FilterPills, SearchBox, StatCard, TodayChip } from './AdminUi';
 
 const PAGE_SIZE = 8;
@@ -26,7 +28,7 @@ const STATUSES: OrderStat[] = ['Pending', 'Shipped', 'Delivered', 'Cancelled'];
 const SELECT_STYLE: Record<OrderStat, string> = {
   Pending: 'bg-pending text-pending-text',
   Shipped: 'bg-mint text-forest',
-  Delivered: 'bg-forest text-white',
+  Delivered: 'bg-forest text-white select-arrow-light',
   Cancelled: 'bg-cancelled text-cancelled-text',
 };
 
@@ -42,18 +44,14 @@ const REFUND_STYLE: Record<RefundStat, string> = {
   Requested: 'bg-pending text-pending-text',
   Approved: 'bg-mint text-forest',
   Rejected: 'bg-line text-muted',
-  Refunded: 'bg-forest text-white',
+  Refunded: 'bg-forest text-white select-arrow-light',
 };
 
 type Tab = OrderStat | 'all' | 'refund';
 
-const itemSummary = (o: OrderWithItems) =>
-  o.items.length === 0 ? '-' : o.items[0].item_name + (o.items.length > 1 ? ` +${o.items.length - 1} more` : '');
-
 // the orders that are showing, as a spreadsheet file
 function exportCsv(orders: OrderWithItems[]) {
-  const cell = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const lines = [
+  downloadCsv('comfyco-orders', [
     ['Order #', 'Customer', 'Items', 'Total', 'Payment', 'Status', 'Placed', 'Ship to'],
     ...orders.map((o) => [
       o.order_num,
@@ -65,13 +63,7 @@ function exportCsv(orders: OrderWithItems[]) {
       formatDateTime(o.placed_at),
       parseShipping(o.shipping_add).address,
     ]),
-  ];
-  const blob = new Blob(['﻿' + lines.map((l) => l.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `comfyco-orders-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  ]);
 }
 
 function OrderDetails({
@@ -267,7 +259,7 @@ export default function OrdersPage() {
             #{o.order_num}
           </button>
           {o._temp_payment_status === 'For verification' && o.order_stat === 'Pending' && (
-            <Button size="sm" className="cursor-pointer" onClick={() => setViewing(o)}>
+            <Button size="sm" onClick={() => setViewing(o)}>
               Check payment
             </Button>
           )}
@@ -275,7 +267,7 @@ export default function OrdersPage() {
       ),
     },
     { key: 'customer', header: 'Customer', render: (o) => o.customer_name },
-    { key: 'item', header: 'Item', render: (o) => <span className="line-clamp-1">{itemSummary(o)}</span>, className: 'max-w-64' },
+    { key: 'item', header: 'Item', render: (o) => <OrderItemsCell order={o} />, className: 'max-w-64' },
     { key: 'total', header: 'Total', render: (o) => <span className="font-medium">{formatPeso(o.total_amt)}</span> },
     {
       key: 'status',
@@ -287,7 +279,7 @@ export default function OrdersPage() {
           disabled={o.order_stat === 'Cancelled' || saving === o.order_id}
           onChange={(e) => changeStatus(o, e.target.value as OrderStat)}
           className={cn(
-            'cursor-pointer rounded-full border-0 py-1 pl-3 pr-7 text-xs font-semibold focus:ring-2 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-80',
+            'cursor-pointer rounded-full border-0 py-1 pl-3 pr-8 text-xs font-semibold focus:ring-2 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-80',
             SELECT_STYLE[o.order_stat],
           )}
         >
@@ -314,7 +306,7 @@ export default function OrdersPage() {
             disabled={!next.length || saving === o.order_id}
             onChange={(e) => saveRefund(o, e.target.value as RefundStat)}
             className={cn(
-              'cursor-pointer rounded-full border-0 py-1 pl-3 pr-7 text-xs font-semibold focus:ring-2 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-80',
+              'cursor-pointer rounded-full border-0 py-1 pl-3 pr-8 text-xs font-semibold focus:ring-2 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-80',
               REFUND_STYLE[refund_stat],
             )}
           >

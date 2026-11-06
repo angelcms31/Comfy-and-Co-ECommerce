@@ -12,16 +12,14 @@ import type { OrderStat } from '@/types/db';
 import type { SalesRange } from '@/types/admin';
 import type { OrderWithItems } from '@/types/models';
 import AdminPageHeader from './AdminPageHeader';
+import OrderItemsCell from './OrderItemsCell';
 import { Card, StatCard, TodayChip } from './AdminUi';
 import SalesChart, { ChartLegend } from './SalesChart';
-
-const itemSummary = (o: OrderWithItems) =>
-  o.items.length === 0 ? '-' : o.items[0].item_name + (o.items.length > 1 ? ` +${o.items.length - 1} more` : '');
 
 const columns: Column<OrderWithItems>[] = [
   { key: 'num', header: 'Order #', render: (o) => <span className="font-medium">#{o.order_num}</span> },
   { key: 'customer', header: 'Customer', render: (o) => o.customer_name },
-  { key: 'item', header: 'Item', render: (o) => <span className="line-clamp-1">{itemSummary(o)}</span>, className: 'max-w-64' },
+  { key: 'item', header: 'Item', render: (o) => <OrderItemsCell order={o} />, className: 'max-w-64' },
   { key: 'total', header: 'Total', render: (o) => <span className="font-medium">{formatPeso(o.total_amt)}</span> },
   { key: 'status', header: 'Status', render: (o) => <StatusPill status={o.order_stat} /> },
 ];
@@ -61,7 +59,7 @@ export default function DashboardPage() {
               <span className="flex flex-wrap items-center gap-3">
                 Sales
                 <span className="w-36 font-sans text-sm font-normal">
-                  <Select aria-label="Sales range" value={range} onChange={(e) => setRange(e.target.value as SalesRange)} className="h-9 py-0">
+                  <Select aria-label="Sales range" value={range} onChange={(e) => setRange(e.target.value as SalesRange)} className="h-9 !py-0">
                     <option value="7d">Last 7 Days</option>
                     <option value="30d">Last 30 Days</option>
                   </Select>
@@ -78,7 +76,7 @@ export default function DashboardPage() {
             actions={
               <div className="flex items-center gap-3">
                 <div className="w-36">
-                  <Select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value as OrderStat | '')} className="h-9 py-0">
+                  <Select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value as OrderStat | '')} className="h-9 !py-0">
                     <option value="">Status: All</option>
                     <option value="Pending">Pending</option>
                     <option value="Shipped">Shipped</option>
