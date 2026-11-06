@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Banknote, Pencil, ShoppingBag, Smartphone, Store, Truck } from 'lucide-react';
 import Button, { ButtonLink } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Input';
@@ -8,7 +8,10 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
+import { useAsync } from '@/hooks/useAsync';
 import { orderService } from '@/services/orderService';
+import { productService } from '@/services/productService';
+import type { CartLine } from '@/types/models';
 import { COURIERS, DELIVERY_DAYS, DELIVERY_FEE, STORE_ADDRESS } from '@/lib/constants';
 import { itemCount, lineTotal, linesTotal, readCheckoutIds } from '@/lib/checkout';
 import { addDays, toDay } from '@/lib/dates';
@@ -68,13 +71,25 @@ export default function CheckoutPage() {
   const [courierError, setCourierError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
 
-  if (!user) return null; // RequireLogin handles this
-  if (cart.loading) return <div className="container-page max-w-4xl py-8"><LoadingState label="Loading your cart..." layout="list" /></div>;
-  if (cart.error) return <ErrorState message={cart.error} onRetry={cart.reload} />;
+  // Buy Now on a product page: /checkout?buy=<variant>&qty=<number>. It's in the URL so it survives logging in and editing the address.
+  const [params] = useSearchParams();
+  const buyId = Number(params.get('buy')) || null;
+  const buyNow = useAsync(() => (buyId ? productService.getVariants([buyId]) : Promise.resolve([])), [buyId]);
+  const buySearch = buyId ? `?${params.toString()}` : '';
 
-  // the items ticked in the cart (all of them if the cart was skipped)
+  if (!user) return null; // RequireLogin handles this
+  if (cart.loading || (buyId && buyNow.loading)) return <div className="container-page max-w-4xl py-8"><LoadingState label="Loading your order..." layout="list" /></div>;
+  if (cart.error) return <ErrorState message={cart.error} onRetry={cart.reload} />;
+  if (buyNow.error) return <ErrorState message={buyNow.error} onRetry={buyNow.reload} />;
+
+  const buyVariant = buyNow.data?.[0];
+  const buyLines: CartLine[] = buyVariant
+    ? [{ cart_item_id: `buy-${buyVariant.prod_var_id}`, prod_var_id: buyVariant.prod_var_id, quantity: Math.min(Math.max(1, Math.floor(Number(params.get('qty'))) || 1), buyVariant.stocks), variant: buyVariant }]
+    : [];
+
+  // the one Buy Now item, or the items ticked in the cart (all of them if the cart was skipped)
   const ids = readCheckoutIds();
-  const lines = cart.lines.filter((l) => isBuyable(l.variant) && (!ids || ids.includes(l.prod_var_id)));
+  const lines = buyId ? buyLines.filter((l) => isBuyable(l.variant)) : cart.lines.filter((l) => isBuyable(l.variant) && (!ids || ids.includes(l.prod_var_id)));
 
   if (lines.length === 0) {
     return (
@@ -82,8 +97,8 @@ export default function CheckoutPage() {
         <EmptyState
           icon={<ShoppingBag className="size-7" />}
           title="Nothing to check out"
-          message="Pick the items you want from your cart first."
-          action={<ButtonLink to="/cart">Go to cart</ButtonLink>}
+          message={buyId ? 'This item is no longer available.' : 'Pick the items you want from your cart first.'}
+          action={buyId ? <ButtonLink to="/products">Browse products</ButtonLink> : <ButtonLink to="/cart">Go to cart</ButtonLink>}
         />
       </div>
     );
@@ -126,8 +141,8 @@ export default function CheckoutPage() {
 
   return (
     <div className="container-page max-w-3xl py-6 sm:py-10">
-      <Link to="/cart" className="inline-flex items-center gap-1 text-sm text-muted hover:text-forest">
-        <ArrowLeft className="size-4" /> Back to cart
+      <Link to={buyVariant ? `/products/${buyVariant.product_id}?variant=${buyVariant.prod_var_id}` : '/cart'} className="inline-flex items-center gap-1 text-sm text-muted hover:text-forest">
+        <ArrowLeft className="size-4" /> {buyVariant ? 'Back to product' : 'Back to cart'}
       </Link>
       <h1 className="mb-6 mt-2 text-3xl font-semibold text-forest sm:text-4xl">Checkout</h1>
 
@@ -190,7 +205,7 @@ export default function CheckoutPage() {
         <Card
           title={fulfillment === 'delivery' ? 'Shipping Address' : 'Contact Details'}
           action={
-            <Link to="/checkout/shipping" className="inline-flex items-center gap-1 text-sm text-ink hover:text-forest">
+            <Link to={`/checkout/shipping${buySearch}`} className="inline-flex items-center gap-1 text-sm text-ink hover:text-forest">
               <Pencil className="size-3.5" /> Edit details
             </Link>
           }
@@ -207,7 +222,7 @@ export default function CheckoutPage() {
           ) : (
             <div className="rounded-xl bg-butter-light p-4 text-sm">
               <p className="text-ink">We need your mobile number and address to send your order.</p>
-              <ButtonLink to="/checkout/shipping" size="sm" className="mt-3">
+              <ButtonLink to={`/checkout/shipping${buySearch}`} size="sm" className="mt-3">
                 Add shipping details
               </ButtonLink>
             </div>

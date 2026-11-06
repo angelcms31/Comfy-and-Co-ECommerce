@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { AlertCircle, Heart, ShoppingCart, X, ZoomIn } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { AlertCircle, ChevronLeft, ChevronRight, Heart, ShoppingCart, X, ZoomIn } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import MoreProducts from '@/components/ui/MoreProducts';
 import PriceTag from '@/components/ui/PriceTag';
@@ -18,11 +18,17 @@ import { displayVariant, isBuyable, stockLabel } from '@/lib/product';
 import { cn } from '@/lib/cn';
 import NotFound from '../NotFound';
 
+const THUMBS_SHOWN = 4; // more than this and the row gets left and right buttons
+
 function Gallery({ images, alt }: { images: string[]; alt: string }) {
   const [active, setActive] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+  const [first, setFirst] = useState(0); // the first photo showing in the row
   const list = images.length ? images : [PLACEHOLDER_IMG];
   const src = list[active] ?? list[0];
+  const lastFirst = Math.max(0, list.length - THUMBS_SHOWN);
+  const peek = lastFirst > 0 ? '1.5rem' : '0rem'; // how much of the next photo shows, so it's clear there are more
+  const arrow = 'grid size-9 shrink-0 place-items-center rounded-full border border-forest/30 bg-white text-forest transition-colors hover:bg-mint-light disabled:border-line disabled:text-line disabled:hover:bg-white';
 
   useEffect(() => {
     if (!zoomed) return;
@@ -30,6 +36,34 @@ function Gallery({ images, alt }: { images: string[]; alt: string }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [zoomed]);
+
+  // left and right arrow keys go through the photos, unless someone is typing
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const el = e.target as HTMLElement;
+      if (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return;
+      const next = active + (e.key === 'ArrowRight' ? 1 : -1);
+      if (next < 0 || next >= list.length) return;
+      e.preventDefault();
+      setActive(next);
+      // the row follows, so the photo stays in view
+      setFirst((f) => (next < f ? next : next >= f + THUMBS_SHOWN ? next - THUMBS_SHOWN + 1 : f));
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [active, list.length]);
+
+  // swiping the row on a phone
+  const swipeStart = useRef<number | null>(null);
+  const onSwipeEnd = (x: number) => {
+    if (swipeStart.current === null) return;
+    const moved = x - swipeStart.current;
+    swipeStart.current = null;
+    if (Math.abs(moved) < 30) return;
+    setFirst((f) => Math.min(lastFirst, Math.max(0, f + (moved < 0 ? 1 : -1))));
+  };
 
   return (
     <div className="space-y-3">
@@ -44,21 +78,66 @@ function Gallery({ images, alt }: { images: string[]; alt: string }) {
         </button>
       </div>
       {list.length > 1 && (
-        <div className="grid grid-cols-4 gap-2 sm:gap-3">
-          {list.map((img, i) => (
-            <button
-              key={img}
-              onClick={() => setActive(i)}
-              aria-label={`Image ${i + 1}`}
-              aria-current={i === active}
-              className={cn(
-                'aspect-square overflow-hidden rounded-xl border-2 bg-white transition-colors',
-                i === active ? 'border-forest' : 'border-ink/15 hover:border-mint',
-              )}
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            {lastFirst > 0 && (
+              <button type="button" onClick={() => setFirst((f) => f - 1)} disabled={first === 0} aria-label="Previous photos" className={arrow}>
+                <ChevronLeft className="size-5" />
+              </button>
+            )}
+            {/* the small padding leaves room for the focus ring */}
+            <div
+              className="min-w-0 flex-1 touch-pan-y overflow-hidden p-1 [--gap:0.5rem] sm:[--gap:0.75rem]"
+              onTouchStart={(e) => {
+                swipeStart.current = e.touches[0].clientX;
+              }}
+              onTouchEnd={(e) => onSwipeEnd(e.changedTouches[0].clientX)}
             >
-              <img src={img} alt="" className="size-full object-contain p-1.5" />
-            </button>
-          ))}
+              <div
+                className="flex gap-[var(--gap)] transition-transform duration-300 ease-out motion-reduce:transition-none"
+                style={{ transform: `translateX(calc(${-first} * (100% - ${peek}) / ${THUMBS_SHOWN}${first === lastFirst && lastFirst > 0 ? ` + ${peek} + var(--gap)` : ''}))` }}
+              >
+                {list.map((img, i) => {
+                  const inView = i >= first && i < first + THUMBS_SHOWN;
+                  return (
+                    <button
+                      key={img}
+                      onClick={() => setActive(i)}
+                      tabIndex={inView ? undefined : -1}
+                      aria-hidden={inView ? undefined : true}
+                      aria-label={`Image ${i + 1}`}
+                      aria-current={i === active}
+                      style={{ flex: `0 0 calc((100% - ${lastFirst > 0 ? THUMBS_SHOWN : THUMBS_SHOWN - 1} * var(--gap) - ${peek}) / ${THUMBS_SHOWN})` }}
+                      className={cn(
+                        'aspect-square min-w-0 overflow-hidden rounded-xl border-2 bg-white transition-colors',
+                        i === active ? 'border-forest' : 'border-ink/15 hover:border-mint',
+                      )}
+                    >
+                      <img src={img} alt="" className="size-full object-contain p-1.5" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {lastFirst > 0 && (
+              <button type="button" onClick={() => setFirst((f) => f + 1)} disabled={first === lastFirst} aria-label="Next photos" className={arrow}>
+                <ChevronRight className="size-5" />
+              </button>
+            )}
+          </div>
+          {lastFirst > 0 && (
+            <div className="flex items-center gap-3 px-11">
+              <div data-testid="photo-slider" aria-hidden className="relative h-1 flex-1 overflow-hidden rounded-full bg-line">
+                <div
+                  className="absolute inset-y-0 rounded-full bg-forest transition-[left] duration-300 ease-out motion-reduce:transition-none"
+                  style={{ left: `${(first / list.length) * 100}%`, width: `${(THUMBS_SHOWN / list.length) * 100}%` }}
+                />
+              </div>
+              <span className="text-xs tabular-nums text-muted">
+                {active + 1} / {list.length}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -80,6 +159,7 @@ export default function ProductDetailsPage() {
   const { data: product, loading, error, reload } = useAsync(() => productService.getById(productId), [productId]);
   const { addItem, lines } = useCart();
   const wishlist = useWishlist();
+  const navigate = useNavigate();
 
   const [quantity, setQuantity] = useState(1);
   const [adding, setAdding] = useState(false);
@@ -189,6 +269,11 @@ export default function ProductDetailsPage() {
               <ShoppingCart className="size-4" />
               {buyable ? 'Add to Cart' : 'Out of stock'}
             </Button>
+            {buyable && (
+              <Button size="lg" variant="secondary" className="flex-1 sm:flex-none sm:px-10" onClick={() => navigate(`/checkout?buy=${variant.prod_var_id}&qty=${quantity}`)}>
+                Buy Now
+              </Button>
+            )}
           </div>
           {buyable && canAdd === 0 && <p className="mt-2 text-xs text-muted">You already have all available stock in your cart.</p>}
           <p className="mt-4 text-xs text-muted">SKU: {variant.sku}</p>

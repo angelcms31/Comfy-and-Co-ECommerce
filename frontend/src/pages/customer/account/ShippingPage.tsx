@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -12,6 +12,7 @@ export default function ShippingPage() {
   const { user, updateUser } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const { search } = useLocation(); // keeps a Buy Now item when going back to checkout
 
   const [form, setForm] = useState<ContactForm>(() => contactFromUser(user!));
   const [errors, setErrors] = useState<ContactErrors>({});
@@ -31,7 +32,7 @@ export default function ShippingPage() {
     try {
       updateUser(await userService.updateProfile(contactPatch(form)));
       toast.success('Shipping details saved.');
-      navigate('/checkout');
+      navigate(`/checkout${search}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not save your details');
       setSaving(false);
@@ -41,7 +42,7 @@ export default function ShippingPage() {
   return (
     <div className="container-page max-w-3xl py-6 sm:py-10">
       <form onSubmit={onSubmit} noValidate className="rounded-card border border-line bg-white p-5 shadow-card sm:p-8">
-        <Link to="/checkout" className="inline-flex items-center gap-1 text-sm text-muted hover:text-forest">
+        <Link to={`/checkout${search}`} className="inline-flex items-center gap-1 text-sm text-muted hover:text-forest">
           <ArrowLeft className="size-4" /> Back to checkout
         </Link>
         <h1 className="mb-6 mt-2 text-3xl font-semibold text-forest">Edit Shipping Information</h1>
