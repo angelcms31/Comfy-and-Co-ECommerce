@@ -170,7 +170,7 @@ export default function InventoryPage() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <SearchBox value={search} onChange={setSearch} placeholder="Search products..." className="w-full sm:w-56" />
         <div className="w-44">
-          <Select aria-label="Category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="h-10 rounded-full py-0">
+          <Select aria-label="Category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="h-10 rounded-full !py-0">
             <option value="">Category: All</option>
             {categories.data?.map((c) => (
               <option key={c.item_categ_id} value={c.item_categ_id}>
@@ -180,7 +180,7 @@ export default function InventoryPage() {
           </Select>
         </div>
         <div className="w-48">
-          <Select aria-label="Stock status" value={status} onChange={(e) => setStatus(e.target.value as StockStatus | '')} className="h-10 rounded-full py-0">
+          <Select aria-label="Stock status" value={status} onChange={(e) => setStatus(e.target.value as StockStatus | '')} className="h-10 rounded-full !py-0">
             <option value="">Stock Status: All</option>
             <option value="in">In Stock</option>
             <option value="low">Low Stock</option>

@@ -170,7 +170,7 @@ export default function ReviewsPage() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <SearchBox value={search} onChange={setSearch} placeholder="Search by customer, review text, or product..." className="w-full flex-1 sm:min-w-64" />
         <div className="w-40">
-          <Select aria-label="Rating" value={rating} onChange={(e) => setRating(e.target.value)} className="h-10 rounded-full py-0">
+          <Select aria-label="Rating" value={rating} onChange={(e) => setRating(e.target.value)} className="h-10 rounded-full !py-0">
             <option value="">Rating: All</option>
             {[5, 4, 3, 2, 1].map((n) => (
               <option key={n} value={n}>

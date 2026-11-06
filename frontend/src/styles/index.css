@@ -94,6 +94,35 @@
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-forest;
   }
+  a[href],
+  button:not(:disabled),
+  select:not(:disabled),
+  summary,
+  label[for],
+  [role='button'],
+  [role='tab'],
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='date']:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled,
+  select:disabled {
+    cursor: not-allowed;
+  }
+  /* our own arrow, because the browser's sits right against the edge */
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235c6b65' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 0.875rem;
+  }
+}
+
+/* the dropdown arrow on a dark background */
+@utility select-arrow-light {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
 
 @utility checker-butter {

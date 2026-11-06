@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
 export function TodayChip() {
   const today = new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' });
   return (
-    <span className="inline-flex items-center gap-2 rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink">
+    <span className="inline-flex items-center gap-2 text-sm text-muted">
       <CalendarDays className="size-4 text-forest" /> Today: {today}
     </span>
   );
