@@ -6,6 +6,7 @@ import PasswordInput from '@/components/ui/PasswordInput';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { cleanMobile, isValidMobile, MOBILE_ERROR, normalizeMobile } from '@/lib/mobile';
+import { isValidName, NAME_ERROR } from '@/lib/names';
 import { authService } from '@/services/authService';
 import AuthCard from './AuthCard';
 
@@ -22,6 +23,7 @@ const optional = <em className="font-normal text-muted">(optional)</em>;
 function validate(f: Form) {
   const e: Partial<Record<keyof Form, string>> = {};
   if (!f.full_name.trim()) e.full_name = 'Please enter your name';
+  else if (!isValidName(f.full_name)) e.full_name = NAME_ERROR;
   if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) e.email = 'Please enter a valid email';
   if (f.mobile_no && !isValidMobile(f.mobile_no)) e.mobile_no = MOBILE_ERROR;
   if (f.birthdate && f.birthdate >= today()) e.birthdate = 'Birthdate must be in the past';

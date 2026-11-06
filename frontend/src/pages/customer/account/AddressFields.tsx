@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import Input, { Select } from '@/components/ui/Input';
 import { useAsync } from '@/hooks/useAsync';
 import { cleanMobile, isValidMobile, MOBILE_ERROR, normalizeMobile } from '@/lib/mobile';
+import { isValidName, NAME_ERROR } from '@/lib/names';
 import { locationService } from '@/services/locationService';
 import type { UserProfile } from '@/types/models';
 
@@ -30,6 +31,7 @@ export const contactFromUser = (u: UserProfile): ContactForm => ({
 export function validateContact(f: ContactForm, requireAddress: boolean): ContactErrors {
   const e: ContactErrors = {};
   if (!f.full_name.trim()) e.full_name = 'Please enter your name';
+  else if (!isValidName(f.full_name)) e.full_name = NAME_ERROR;
   if (f.mobile_no.trim() || requireAddress) {
     if (!isValidMobile(f.mobile_no)) e.mobile_no = MOBILE_ERROR;
   }

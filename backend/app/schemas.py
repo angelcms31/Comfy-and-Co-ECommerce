@@ -1,12 +1,23 @@
+import re
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class LoginIn(BaseModel):
     email: str
     password: str
+
+
+# full names: letters from any language, spaces, and . ' - (frontend/src/lib/names.ts has the same rule)
+NAME = re.compile(r"^[^\W\d_](?:[^\W\d_]|[ .'’-])*$")
+
+
+def check_name(value: str | None) -> str | None:
+    if value is not None and not NAME.match(value.strip()):
+        raise ValueError("Use letters, spaces and . ' - only")
+    return value
 
 
 class RegisterIn(BaseModel):
@@ -15,6 +26,8 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=8)
     mobile_no: str | None = None
     birthdate: date | None = None
+
+    _name = field_validator("full_name")(check_name)
 
 
 class EmailIn(BaseModel):
@@ -38,6 +51,8 @@ class ProfilePatch(BaseModel):
     st_add: str | None = None
     postal: str | None = None
     city_id: int | None = None
+
+    _name = field_validator("full_name")(check_name)
 
 
 class CartItemIn(BaseModel):
@@ -163,6 +178,8 @@ class AdminIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
     role: AdminRole = "admin"
+
+    _name = field_validator("full_name")(check_name)
 
 
 class AdminRoleIn(BaseModel):
