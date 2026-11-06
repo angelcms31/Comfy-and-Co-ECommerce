@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KeyRound, Lock, Plus, RotateCcw, UserCog, UserX } from 'lucide-react';
+import { KeyRound, Lock, Plus, RotateCcw, UserCog, UserX, Download } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Input, { Select } from '@/components/ui/Input';
@@ -18,6 +18,8 @@ import { cn } from '@/lib/cn';
 import { formatDate, formatDateTime } from '@/lib/dates';
 import { ACCOUNT_DELETE_DAYS } from '@/lib/constants';
 import { ROLE_LABEL } from '@/lib/roles';
+import { downloadCsv } from '@/lib/csv';
+import { isValidName, NAME_ERROR } from '@/lib/names';
 import type { AdminAccount, AdminRoleName, AllSettings, AuditAction, AuditLogRow, NewAdminInput } from '@/types/admin';
 import AdminPageHeader from './AdminPageHeader';
 import { Card, FilterPills } from './AdminUi';
@@ -130,13 +132,20 @@ function AddAdminModal({ open, onClose, onAdded }: { open: boolean; onClose: () 
   const empty: NewAdminInput = { full_name: '', email: '', password: '', role: 'admin' };
   const [form, setForm] = useState(empty);
   const [busy, setBusy] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
   useEffect(() => {
-    if (open) setForm(empty);
+    if (open) {
+      setForm(empty);
+      setNameError(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const bad = !isValidName(form.full_name);
+    setNameError(bad ? NAME_ERROR : null);
+    if (bad) return;
     setBusy(true);
     try {
       await adminService.addAdmin({ ...form, full_name: form.full_name.trim(), email: form.email.trim() });
@@ -167,7 +176,7 @@ function AddAdminModal({ open, onClose, onAdded }: { open: boolean; onClose: () 
       }
     >
       <form id="add-admin" onSubmit={onSubmit} className="space-y-3">
-        <Input label="Full name" required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+        <Input label="Full name" required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} error={nameError} />
         <Input label="Email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
         <PasswordInput
           label="Temporary password"
@@ -186,7 +195,7 @@ function AddAdminModal({ open, onClose, onAdded }: { open: boolean; onClose: () 
   );
 }
 
-function UserManagement({ settings, addOpen, setAddOpen }: { settings: ReturnType<typeof useAsync<AllSettings>>; addOpen: boolean; setAddOpen: (v: boolean) => void }) {
+function UserManagement({ settings, addOpen, setAddOpen, onViewLogs }: { settings: ReturnType<typeof useAsync<AllSettings>>; addOpen: boolean; setAddOpen: (v: boolean) => void; onViewLogs: () => void }) {
   const toast = useToast();
   const { user } = useAuth();
   const admins = useAsync(() => adminService.getAdmins(), []);
@@ -342,7 +351,14 @@ function UserManagement({ settings, addOpen, setAddOpen }: { settings: ReturnTyp
             Force Logout All Active Sessions
           </Button>
         </Card>
-        <Card title={<span className="text-lg">Recent System Activity</span>}>
+        <Card
+          title={<span className="text-lg">Recent System Activity</span>}
+          actions={
+            <button type="button" onClick={onViewLogs} className="text-sm font-medium text-forest underline underline-offset-2 hover:text-forest-light">
+              View all
+            </button>
+          }
+        >
           {activity.data?.rows.length ? (
             <ul className="space-y-2 text-sm">
               {activity.data.rows.map((r) => (
@@ -554,6 +570,7 @@ const ACTIONS: { value: AuditAction | ''; label: string }[] = [
 ];
 
 function SecurityLogs({ settings }: { settings: ReturnType<typeof useAsync<AllSettings>> }) {
+  const toast = useToast();
   const security = useSecurityActions(settings);
   const admins = useAsync(() => adminService.getAdmins(), []);
   const [admin, setAdmin] = useState('');
@@ -562,6 +579,36 @@ function SecurityLogs({ settings }: { settings: ReturnType<typeof useAsync<AllSe
   const pageSize = 10;
   const logs = useAsync(() => adminService.getAuditLogs({ admin: admin || undefined, action: action || undefined, page, pageSize }), [admin, action, page]);
   useEffect(() => setPage(1), [admin, action]);
+
+  // every row that matches the filters, not just the page on screen
+  const [downloading, setDownloading] = useState(false);
+  const download = async () => {
+    setDownloading(true);
+    try {
+      const size = 500;
+      const rows: AuditLogRow[] = [];
+      for (let p = 1; ; p++) {
+        const part = await adminService.getAuditLogs({ admin: admin || undefined, action: action || undefined, page: p, pageSize: size });
+        rows.push(...part.rows);
+        if (part.rows.length < size || rows.length >= part.total) break;
+      }
+      downloadCsv('comfyco-audit-logs', [
+        ['Timestamp', 'Admin User', 'Role', 'Action Performed', 'IP Address', 'Device'],
+        ...rows.map((r) => [
+          formatDateTime(r.created_at),
+          r.admin_name ?? 'Removed user',
+          r.role && r.role !== 'customer' ? ROLE_LABEL[r.role] : '',
+          r.action,
+          r.ip_address ?? '',
+          r.device ?? '',
+        ]),
+      ]);
+    } catch (err) {
+      toast.error(errorText(err));
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const columns: Column<AuditLogRow>[] = [
     { key: 'time', header: 'Timestamp', render: (r) => <span className="whitespace-nowrap text-muted">{formatDateTime(r.created_at)}</span> },
@@ -618,8 +665,11 @@ function SecurityLogs({ settings }: { settings: ReturnType<typeof useAsync<AllSe
         title={<span className="text-lg">System Audit Log</span>}
         actions={
           <div className="flex flex-wrap gap-2">
-            <div className="w-48">
-              <Select aria-label="Filter by admin" value={admin} onChange={(e) => setAdmin(e.target.value)} className="h-9 py-0">
+            <Button variant="outline" size="sm" onClick={download} loading={downloading} disabled={!logs.data?.total}>
+              <Download className="size-4" /> Download CSV
+            </Button>
+            <div className="w-64">
+              <Select aria-label="Filter by admin" value={admin} onChange={(e) => setAdmin(e.target.value)} className="h-9 !py-0">
                 <option value="">Filter by Admin: All Admins</option>
                 {admins.data?.map((a) => (
                   <option key={a.user_id} value={a.user_id}>
@@ -628,8 +678,8 @@ function SecurityLogs({ settings }: { settings: ReturnType<typeof useAsync<AllSe
                 ))}
               </Select>
             </div>
-            <div className="w-48">
-              <Select aria-label="Filter by action" value={action} onChange={(e) => setAction(e.target.value as AuditAction | '')} className="h-9 py-0">
+            <div className="w-64">
+              <Select aria-label="Filter by action" value={action} onChange={(e) => setAction(e.target.value as AuditAction | '')} className="h-9 !py-0">
                 {ACTIONS.map((a) => (
                   <option key={a.value} value={a.value}>
                     Filter by Action: {a.label}
@@ -690,7 +740,7 @@ export default function SettingsPage() {
           { value: 'security', label: 'Security & Audit Logs' },
         ]}
       />
-      {tab === 'users' && <UserManagement settings={settings} addOpen={addOpen} setAddOpen={setAddOpen} />}
+      {tab === 'users' && <UserManagement settings={settings} addOpen={addOpen} setAddOpen={setAddOpen} onViewLogs={() => setTab('security')} />}
       {tab === 'store' && <StoreInfo settings={settings} />}
       {tab === 'security' && <SecurityLogs settings={settings} />}
     </>
