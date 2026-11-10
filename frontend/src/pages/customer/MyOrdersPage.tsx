@@ -17,9 +17,9 @@ import type { OrderWithItems } from '@/types/models';
 import { cn } from '@/lib/cn';
 import { formatDate } from '@/lib/dates';
 import { firstImage } from '@/lib/images';
-import { MAX_SEARCH } from '@/lib/constants';
+import { MAX_SEARCH, REFUND_DAYS } from '@/lib/constants';
 import { formatPeso } from '@/lib/pricing';
-import { awaitingReceipt, ORDER_TABS, orderTab, parseShipping, type OrderTab } from '@/lib/tracking';
+import { awaitingReceipt, ORDER_TABS, orderTab, parseShipping, refundDeadline, refundOpen, type OrderTab } from '@/lib/tracking';
 
 const CHIP: Record<Exclude<OrderTab, 'all'>, { label: string; className: string }> = {
   to_pay: { label: 'To Pay', className: 'bg-pending text-pending-text' },
@@ -160,9 +160,15 @@ function OrderCard({
       </ButtonLink>
     ) : (
       <>
-        <Button variant="outline" size="sm" onClick={onRefund}>
-          Request Refund
-        </Button>
+        {refundOpen(order) ? (
+          <Button variant="outline" size="sm" onClick={onRefund} title={`Until ${formatDate(refundDeadline(order).toISOString())}`}>
+            Request Refund
+          </Button>
+        ) : (
+          <span className="self-center text-xs text-muted" title={`Refunds can be requested within ${REFUND_DAYS} days of delivery`}>
+            Refund window closed
+          </span>
+        )}
         <Button size="sm" onClick={onReview}>
           Write Review
         </Button>

@@ -119,6 +119,7 @@ Each user has one `wishlist_col`. Create it on the first add. All return `Wishli
 | POST | `/orders/{order_id}/received` | – | `OrderWithItems`; the customer confirms a `Shipped` order, it becomes `Delivered` (`delivered_by` = `customer`) |
 | POST | `/orders/delivery-quote` | `{ lines, st_add, postal, city_id, lat?, lng? }` | `DeliveryQuote`: the Lalamove `vehicle` picked from the items' packed size and weight, `trips`, road `distance_km` from the store, `delivery_fee`, the drop-off point and `located_by` (`pin` / `address`). 400 when the address can't be found on the map or is past Settings > Delivery `max_km` |
 | POST | `/orders/{order_id}/delivery-feedback` | `{ received, details? }` | `OrderWithItems`; after the rider marked it `Delivered`: `received: true` sets `receipt_confirmed_at`, `false` needs `details` and sets `not_received_report` / `not_received_at` (shown to admins on the order) |
+| POST | `/orders/{order_id}/refund` | `{ reason, details?, photos[] }` | `OrderWithItems`; only a `Delivered` order, within `REFUND_DAYS` (3) of `delivered_at` (400 after that), one request per order, a photo is required unless the reason is `Other` |
 | POST | `/orders/uploads` | image file | `{ url }`; a refund photo, up to 5 MB (any logged in customer) |
 | POST | `/orders/{order_id}/gcash/confirm` | `{ reference }` (13 digits) | `OrderWithItems`; the order's owner sends the reference number after scanning the store's QR, only while `Pending`. `_temp_payment_status` becomes `For verification` (SCHEMA_GAPS #2) |
 

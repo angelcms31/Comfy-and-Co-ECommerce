@@ -1,7 +1,9 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from .. import delivery, events, queries
-from ..config import COURIER, IMAGE_BUCKET
+from ..config import COURIER, IMAGE_BUCKET, REFUND_DAYS
 from ..db import Db
 from ..deps import ADMIN_ROLES, current_user
 from ..pricing import effective_price
@@ -231,6 +233,10 @@ def request_refund(db: Db, order_id: int, body: RefundIn, user=Depends(current_u
         raise HTTPException(400, "You can only ask for a refund after the order is delivered")
     if order["refund"]:
         raise HTTPException(400, "A refund was already requested for this order")
+    # only within REFUND_DAYS of the delivery (orders delivered before delivered_at existed count from when they were placed)
+    delivered = order["delivered_at"] or order["placed_at"]
+    if datetime.now(timezone.utc) - delivered > timedelta(days=REFUND_DAYS):
+        raise HTTPException(400, f"Refunds can only be requested within {REFUND_DAYS} days of delivery")
     details = (body.details or "").strip() or None
     # "Other" can be something a photo can't show, every other reason is about the item itself
     if not body.photos and body.reason.strip() != "Other":

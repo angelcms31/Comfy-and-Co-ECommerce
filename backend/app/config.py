@@ -25,6 +25,7 @@ SMTP_PASS = os.getenv("SMTP_PASS", "").replace(" ", "")  # Google shows app pass
 SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Comfy&Co")
 LOW_STOCK_LIMIT = 5
 DELETE_AFTER_DAYS = 30  # a deactivated account is deleted this many days later
+REFUND_DAYS = 3  # a refund can be requested up to this many days after the order was delivered
 COURIER = "Lalamove"  # every delivery is one Lalamove booking, store pickup is free
 MAX_DELIVERY_ATTEMPTS = 3  # after this many failed hand-overs the order is Returned to the store
 FAILED_ATTEMPT_REASONS = ["Customer not home", "Customer unreachable", "Wrong or incomplete address", "Customer refused the package", "Other"]
@@ -55,7 +56,7 @@ SETTING_DEFAULTS = {
     },
     "policies": {
         "cancellation_window": "Before the order ships",
-        "return_policy": "7-Day Return & Refund Window",
+        "return_policy": "3-Day Return & Refund Window",  # display only, REFUND_DAYS is what the API enforces
         "refund_method": "Original Payment Method",
         "free_shipping_threshold": 0,
     },

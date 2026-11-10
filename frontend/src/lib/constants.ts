@@ -35,4 +35,5 @@ export const STORE_LOCATION: [number, number] = [14.58689, 120.97636]; // lat, l
 export const STORE_HOURS = 'Mon–Sat, 9AM–6PM';
 export const STORE_PHONE = '+63 912 345 6789';
 export const STORE_EMAIL = 'comfyandco@gmail.com';
+export const REFUND_DAYS = 3; // a refund can be requested this many days after delivery (backend REFUND_DAYS)
 export const ACCOUNT_DELETE_DAYS = 30; // a deactivated account is deleted this many days later (backend DELETE_AFTER_DAYS)

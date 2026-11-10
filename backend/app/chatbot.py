@@ -6,7 +6,7 @@ Store details come from the Settings page (store_setting), so the answers stay r
 import re
 
 from . import queries
-from .config import COURIER
+from .config import COURIER, REFUND_DAYS
 
 # the buttons under the chat; each one is sent as a message, so its text has to match a topic below
 SUGGESTIONS = ["Shipping & delivery", "Payment methods", "Track my order", "Returns & refunds", "Store hours & location", "Talk to staff"]
@@ -72,8 +72,8 @@ def cancel(db, user):
 def returns(db, user):
     policies = queries.setting(db, "policies")
     return (
-        f"Our policy: {policies['return_policy']}. If an item arrives damaged or wrong, open the delivered order in Track order "
-        f"and request a refund with photos of the item. Refunds go back through: {policies['refund_method']}."
+        f"If an item arrives damaged or wrong, open the delivered order in Track order and request a refund with photos of the item, "
+        f"within {REFUND_DAYS} days of the delivery. Refunds go back through: {policies['refund_method']}."
     )
 
 

@@ -16,7 +16,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { adminService } from '@/services/adminService';
 import { cn } from '@/lib/cn';
 import { formatDate, formatDateTime } from '@/lib/dates';
-import { ACCOUNT_DELETE_DAYS } from '@/lib/constants';
+import { ACCOUNT_DELETE_DAYS, REFUND_DAYS } from '@/lib/constants';
 import { ROLE_LABEL } from '@/lib/roles';
 import { emailError } from '@/lib/email';
 import { downloadCsv } from '@/lib/csv';
@@ -498,11 +498,8 @@ function StoreInfo({ settings }: { settings: ReturnType<typeof useAsync<AllSetti
               <option>Within 24 Hours of Order Placement</option>
               <option>Within 48 Hours of Order Placement</option>
             </Select>
-            <Select label="Return &amp; Refund Policy" value={form.policies.return_policy} onChange={set('policies', 'return_policy')}>
-              <option>7-Day Return &amp; Refund Window</option>
-              <option>14-Day Return &amp; Refund Window</option>
-              <option>30-Day Return &amp; Refund Window</option>
-              <option>No Returns</option>
+            <Select label="Return &amp; Refund Policy" value={form.policies.return_policy} onChange={set('policies', 'return_policy')} hint={`Customers can request a refund up to ${REFUND_DAYS} days after the delivery. After that the Request Refund button is gone.`}>
+              <option>{REFUND_DAYS}-Day Return &amp; Refund Window</option>
             </Select>
             <Select label="Refund Method" value={form.policies.refund_method} onChange={set('policies', 'refund_method')}>
               <option>Original Payment Method</option>

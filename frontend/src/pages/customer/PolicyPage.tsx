@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { REFUND_DAYS } from '@/lib/constants';
 
 // Sample text for the school project, replace with the group's final wording.
 const pages = {
@@ -10,7 +11,7 @@ const pages = {
       ['Prices', 'All prices are in Philippine Peso (₱). Sale prices are valid only within the dates shown on the product page.'],
       ['Payment', 'We accept GCash and Cash on Delivery. For COD, please prepare the exact amount when your order arrives.'],
       ['Delivery', 'Delivery times depend on your location. Someone must be present to receive and check the items.'],
-      ['Returns', 'Items that arrive damaged can be reported within 7 days of delivery for a replacement.'],
+      ['Returns', `Items that arrive damaged or wrong can be reported within ${REFUND_DAYS} days of delivery for a refund.`],
     ],
   },
   privacy: {

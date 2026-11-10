@@ -1,5 +1,5 @@
 import type { OrderWithItems } from '@/types/models';
-import { DELIVERY_DAYS } from './constants';
+import { DELIVERY_DAYS, REFUND_DAYS } from './constants';
 
 export type LatLng = [number, number];
 
@@ -63,6 +63,16 @@ export function canPayGcash(order: PaymentFields) {
 }
 
 // the rider marked it delivered and the customer hasn't said yet whether they got it
+// the last moment a refund can be requested: REFUND_DAYS after the delivery (older orders without delivered_at count
+// from when they were placed, same as the backend)
+export function refundDeadline(order: Pick<OrderWithItems, 'delivered_at' | 'placed_at'>) {
+  return new Date(Date.parse(order.delivered_at ?? order.placed_at) + REFUND_DAYS * 86400000);
+}
+
+export function refundOpen(order: Pick<OrderWithItems, 'order_stat' | 'refund' | 'delivered_at' | 'placed_at'>) {
+  return order.order_stat === 'Delivered' && !order.refund && Date.now() <= refundDeadline(order).getTime();
+}
+
 export function awaitingReceipt(order: Pick<OrderWithItems, 'order_stat' | 'delivered_by' | 'receipt_confirmed_at' | 'not_received_at'>) {
   return order.order_stat === 'Delivered' && order.delivered_by === 'rider' && !order.receipt_confirmed_at && !order.not_received_at;
 }
