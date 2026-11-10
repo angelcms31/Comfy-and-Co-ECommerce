@@ -98,6 +98,10 @@ def list_products(
     elif collection == "best_sellers":
         products.sort(key=lambda p: sold.get(p["product_id"], 0), reverse=True)
 
+    if not include_unavailable:
+        # store side: sold-out products go to the end. The sort is stable, so each group keeps the order chosen above
+        products.sort(key=lambda p: not any(v["stocks"] > 0 for v in p["variants"]))
+
     return products
 
 

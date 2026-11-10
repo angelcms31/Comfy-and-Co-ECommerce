@@ -4,7 +4,7 @@ import { Search } from 'lucide-react';
 import PriceTag from '@/components/ui/PriceTag';
 import { cn } from '@/lib/cn';
 import { firstImage } from '@/lib/images';
-import { displayVariant } from '@/lib/product';
+import { displayVariant, isBuyable } from '@/lib/product';
 import { productService } from '@/services/productService';
 import type { ProductWithVariants } from '@/types/models';
 
@@ -31,11 +31,14 @@ function rank(p: ProductWithVariants, term: string) {
   return `${p.category.item_category} ${p._temp_subcategory ?? ''}`.toLowerCase().includes(term) ? 2 : 3;
 }
 
+// sold-out products come after the ones in stock, then the best match first
+const soldOut = (p: ProductWithVariants) => (p.variants.some(isBuyable) ? 0 : 1);
+
 function suggest(products: ProductWithVariants[], term: string) {
   return products
     .map((product) => ({ product, score: rank(product, term) }))
     .filter((s): s is { product: ProductWithVariants; score: number } => s.score !== null)
-    .sort((a, b) => a.score - b.score || a.product.product_name.localeCompare(b.product.product_name))
+    .sort((a, b) => soldOut(a.product) - soldOut(b.product) || a.score - b.score || a.product.product_name.localeCompare(b.product.product_name))
     .slice(0, MAX_SUGGESTIONS)
     .map((s) => s.product);
 }

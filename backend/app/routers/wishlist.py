@@ -31,6 +31,8 @@ def wishlist_lines(db, user_id: str) -> list[dict]:
     variants = {v["prod_var_id"]: v for v in queries.variants_with_product(db, [i["prod_var_id"] for i in items])}
     for i in items:
         i["variant"] = variants[i["prod_var_id"]]
+    # liked items that can't be bought right now go last, newest first within each group
+    items.sort(key=lambda i: not (i["variant"]["is_avail"] and i["variant"]["product"]["is_avail"] and i["variant"]["stocks"] > 0))
     return items
 
 
