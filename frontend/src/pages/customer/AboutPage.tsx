@@ -19,9 +19,10 @@ function Story({ title, image, fallback, flip, children }: { title: string; imag
         alt=""
         onError={() => setMissing(true)}
         // product photos have a white background, multiply blends it into the butter
-        className={`mx-auto h-56 w-full object-contain sm:h-72 ${missing ? 'mix-blend-multiply' : ''} ${flip ? '' : 'sm:order-2'}`}
+        className={`mx-auto h-72 w-full object-contain sm:h-96 ${missing ? 'mix-blend-multiply' : ''} ${flip ? '' : 'sm:order-2'}`}
       />
-      <div>
+      {/* light box so the text stays readable over the swoosh in the background */}
+      <div className="rounded-card border border-white/70 bg-cream/90 p-5 shadow-card backdrop-blur-sm sm:p-6">
         <h2 className="text-2xl font-semibold leading-tight text-forest sm:text-[1.7rem]">{title}</h2>
         <p className="mt-3 text-justify text-sm leading-relaxed text-ink sm:text-base">{children}</p>
       </div>
