@@ -42,7 +42,9 @@ function AdminReviewCard({ review, onChanged }: { review: ReviewWithMeta; onChan
 
   const startReply = () => {
     // a ready-made thank you to edit, like the mockup
-    setReply(review.reply ?? `Thank you so much for the feedback, ${review.reviewer_name.split(' ')[0]}! We are thrilled you loved the ${review.product_name}.`);
+    // replies are public, so an anonymous reviewer isn't greeted by name
+    const name = review.is_anonymous ? '' : `, ${review.reviewer_name.split(' ')[0]}`;
+    setReply(review.reply ?? `Thank you so much for the feedback${name}! We are thrilled you loved the ${review.product_name}.`);
     setReplying(true);
   };
 
@@ -55,6 +57,11 @@ function AdminReviewCard({ review, onChanged }: { review: ReviewWithMeta; onChan
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-2 font-medium text-ink">
             {review.reviewer_name} <VerifiedBadge />
+            {review.is_anonymous && (
+              <span className="rounded-full bg-cream px-2 py-0.5 text-[11px] font-semibold text-muted" title="Shown as Anonymous on the store">
+                Posted anonymously
+              </span>
+            )}
             {review.is_hidden && <span className="rounded-full bg-line px-2 py-0.5 text-[11px] font-semibold text-muted">Hidden</span>}
           </p>
           <p className="text-xs text-muted">{formatDate(review.created_at)}</p>

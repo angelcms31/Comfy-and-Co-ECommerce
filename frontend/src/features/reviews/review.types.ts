@@ -2,7 +2,7 @@
 
 export interface Review {
   review_id: number;
-  user_id: string;
+  user_id: string | null; // null on the store page when the review is anonymous
   prod_var_id: number;
   rating: number; // 1-5
   content: string;
@@ -12,6 +12,7 @@ export interface Review {
   replied_at: string | null;
   is_featured: boolean;
   is_hidden: boolean;
+  is_anonymous: boolean; // the store page shows "Anonymous", admins still see the name
 }
 
 export type ReviewWithMeta = Review & {
@@ -45,4 +46,5 @@ export interface ReviewInput {
   rating: number;
   content: string;
   photos: string[];
+  is_anonymous: boolean;
 }

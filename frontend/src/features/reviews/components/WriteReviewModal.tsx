@@ -22,6 +22,7 @@ export default function WriteReviewModal({ order, onClose }: { order: OrderWithI
   const [hover, setHover] = useState(0);
   const [content, setContent] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [anonymous, setAnonymous] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -36,6 +37,7 @@ export default function WriteReviewModal({ order, onClose }: { order: OrderWithI
     setRating(0);
     setContent('');
     setPhotos([]);
+    setAnonymous(false);
     setEditing(false);
     reviewService
       .getMine()
@@ -45,6 +47,7 @@ export default function WriteReviewModal({ order, onClose }: { order: OrderWithI
         setRating(r.rating);
         setContent(r.content);
         setPhotos(parseImages(r.photos));
+        setAnonymous(r.is_anonymous);
         setEditing(true);
       })
       .catch(() => {});
@@ -70,7 +73,7 @@ export default function WriteReviewModal({ order, onClose }: { order: OrderWithI
     if (varId === null) return;
     setBusy(true);
     try {
-      await reviewService.write({ prod_var_id: varId, rating, content: content.trim(), photos });
+      await reviewService.write({ prod_var_id: varId, rating, content: content.trim(), photos, is_anonymous: anonymous });
       toast.success(editing ? 'Your review was updated.' : 'Thanks for your review!');
       onClose();
     } catch (err) {
@@ -164,6 +167,14 @@ export default function WriteReviewModal({ order, onClose }: { order: OrderWithI
             </div>
             <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(e) => addPhotos(e.target.files)} />
           </div>
+
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line p-3">
+            <input type="checkbox" className="mt-0.5 size-4 accent-forest" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
+            <span>
+              <span className="block text-sm font-medium text-ink">Post anonymously</span>
+              <span className="block text-xs text-muted">Your name will show as "Anonymous" on the product page.</span>
+            </span>
+          </label>
         </div>
       )}
     </Modal>

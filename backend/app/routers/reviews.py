@@ -32,6 +32,11 @@ def reviews_for(db, where: str = "", params: tuple = ()) -> dict:
     # store side: hidden reviews are left out, featured ones go first
     clause = f"{where} and not r.is_hidden" if where else "where not r.is_hidden"
     rows = db.execute(f"{REVIEW_SELECT} {clause} order by r.is_featured desc, r.created_at desc", params).fetchall()
+    for r in rows:
+        # anonymous reviews: the store page never gets the name or the account behind it
+        if r.get("is_anonymous"):
+            r["reviewer_name"] = "Anonymous"
+            r["user_id"] = None
     return {"summary": summarize(rows), "reviews": rows}
 
 
@@ -96,17 +101,17 @@ def write_review(db: Db, body: ReviewIn, user=Depends(current_user)):
     if not bought:
         raise HTTPException(403, "You can review an item after your order with it is delivered")
 
-    values = (body.rating, body.content.strip(), images_text(body.photos))
+    values = (body.rating, body.content.strip(), images_text(body.photos), body.is_anonymous)
     existing = db.execute(
         "select review_id from review where user_id = %s and prod_var_id = %s", (user["user_id"], body.prod_var_id)
     ).fetchone()
     if existing:
         # one review per item, writing again updates it
-        db.execute("update review set rating = %s, content = %s, photos = %s where review_id = %s", (*values, existing["review_id"]))
+        db.execute("update review set rating = %s, content = %s, photos = %s, is_anonymous = %s where review_id = %s", (*values, existing["review_id"]))
         review_id = existing["review_id"]
     else:
         review_id = db.execute(
-            "insert into review (user_id, prod_var_id, rating, content, photos) values (%s, %s, %s, %s, %s) returning review_id",
+            "insert into review (user_id, prod_var_id, rating, content, photos, is_anonymous) values (%s, %s, %s, %s, %s, %s) returning review_id",
             (user["user_id"], body.prod_var_id, *values),
         ).fetchone()["review_id"]
     return review_or_404(db, review_id)
