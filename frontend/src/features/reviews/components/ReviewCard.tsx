@@ -57,7 +57,7 @@ export default function ReviewCard({ review, showProduct, actions }: { review: R
         </div>
         {actions}
       </header>
-      <p className="mt-3 text-sm leading-relaxed text-ink">{review.content}</p>
+      {review.content && <p className="mt-3 text-sm leading-relaxed text-ink">{review.content}</p>}
       <ReviewPhotos photos={review.photos} />
       <p className="mt-2 text-xs text-muted">
         {showProduct ? `${review.product_name} · ` : ''}Variant: {review.prod_attr}

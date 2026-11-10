@@ -96,7 +96,7 @@ export default function WriteReviewModal({ order, onClose }: { order: OrderWithI
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button onClick={submit} loading={busy} disabled={!rating || !content.trim() || uploading}>
+          <Button onClick={submit} loading={busy} disabled={!rating || uploading}>
             {editing ? 'Update review' : 'Submit review'}
           </Button>
         </>
@@ -129,7 +129,7 @@ export default function WriteReviewModal({ order, onClose }: { order: OrderWithI
           </div>
 
           <Textarea
-            label="Your review"
+            label="Your review (optional)"
             rows={4}
             maxLength={2000}
             placeholder="How's the quality, size and comfort? Would you recommend it?"

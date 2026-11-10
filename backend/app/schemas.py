@@ -245,7 +245,7 @@ class ArchiveIn(BaseModel):
 class ReviewIn(BaseModel):
     prod_var_id: int
     rating: int = Field(ge=1, le=5)
-    content: str = Field(min_length=1, max_length=2000)
+    content: str = Field(default="", max_length=2000)  # optional, the stars alone are a review
     photos: list[str] = Field(default_factory=list, max_length=3)
     is_anonymous: bool = False  # the store page shows "Anonymous", admins still see the name
 

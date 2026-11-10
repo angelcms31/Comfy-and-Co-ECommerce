@@ -153,7 +153,7 @@ When placing an order the backend should:
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
 | GET | `/reviews/mine` | – | `ReviewWithMeta[]` the logged-in customer wrote |
-| POST | `/reviews` | `{ prod_var_id, rating, content, photos: string[], is_anonymous? }` | `ReviewWithMeta`; anonymous reviews show as "Anonymous" (no `user_id`) on the product page, admins still see the name; only after an order with that item is `Delivered` (403 otherwise). Writing again for the same item updates it |
+| POST | `/reviews` | `{ prod_var_id, rating, content?, photos: string[], is_anonymous? }` | `ReviewWithMeta`; `content` can be empty (stars only); anonymous reviews show as "Anonymous" (no `user_id`) on the product page, admins still see the name; only after an order with that item is `Delivered` (403 otherwise). Writing again for the same item updates it |
 | POST | `/reviews/uploads` | multipart `file` | `{ url }` for `photos` (max 3 per review) |
 | GET | `/store-info` | – | public store name, support email, phone, address, hours (Settings > Store Info) |
 

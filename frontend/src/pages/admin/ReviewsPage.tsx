@@ -79,7 +79,7 @@ function AdminReviewCard({ review, onChanged }: { review: ReviewWithMeta; onChan
         </div>
       </div>
 
-      <p className="mt-3 text-sm leading-relaxed text-ink">{review.content}</p>
+      {review.content && <p className="mt-3 text-sm leading-relaxed text-ink">{review.content}</p>}
       <ReviewPhotos photos={review.photos} />
       {review.reply && !replying && <StoreReply reply={review.reply} />}
 
