@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ChevronDown, ChevronRight, Download, FileSpreadsheet, FileText, MapPin, PackageX, Printer, QrCode } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Download, FileSpreadsheet, FileText, Image as ImageIcon, MapPin, PackageX, Printer, QrCode } from 'lucide-react';
 import Button, { buttonClass, ButtonLink } from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Dropdown from '@/components/ui/Dropdown';
@@ -484,24 +484,31 @@ export default function OrdersPage() {
         if (!o.refund) return <span className="text-muted">–</span>;
         const { refund_stat } = o.refund;
         const next = REFUND_NEXT[refund_stat];
+        const photos = parseImages(o.refund.photos);
         return (
-          <select
-            aria-label={`Refund status of order ${o.order_num}`}
-            title={o.refund.reason}
-            value={refund_stat}
-            disabled={!next.length || saving === o.order_id}
-            onChange={(e) => saveRefund(o, e.target.value as RefundStat)}
-            className={cn(
-              'cursor-pointer rounded-full border-0 py-1 pl-3 pr-8 text-xs font-semibold focus:ring-2 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-80',
-              REFUND_STYLE[refund_stat],
-            )}
-          >
-            {[refund_stat, ...next].map((s) => (
-              <option key={s} value={s} className="bg-white text-ink">
-                {s}
-              </option>
-            ))}
-          </select>
+          <div className="space-y-1.5">
+            <select
+              aria-label={`Refund status of order ${o.order_num}`}
+              title={o.refund.reason}
+              value={refund_stat}
+              disabled={!next.length || saving === o.order_id}
+              onChange={(e) => saveRefund(o, e.target.value as RefundStat)}
+              className={cn(
+                'cursor-pointer rounded-full border-0 py-1 pl-3 pr-8 text-xs font-semibold focus:ring-2 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-80',
+                REFUND_STYLE[refund_stat],
+              )}
+            >
+              {[refund_stat, ...next].map((s) => (
+                <option key={s} value={s} className="bg-white text-ink">
+                  {s}
+                </option>
+              ))}
+            </select>
+            {/* the customer's reason and photos are in the order details; this opens them before deciding */}
+            <button type="button" onClick={() => setViewing(o)} className="flex items-center gap-1 whitespace-nowrap text-xs font-medium text-forest hover:underline" title={o.refund.reason}>
+              <ImageIcon className="size-3.5" /> {photos.length ? `View ${photos.length === 1 ? 'photo' : `${photos.length} photos`}` : 'View reason'}
+            </button>
+          </div>
         );
       },
     },
