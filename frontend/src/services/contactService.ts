@@ -7,17 +7,7 @@ export interface ContactInput {
   message: string;
 }
 
-export interface ContactMessage {
-  message_id: number;
-  name: string;
-  email: string;
-  subject: string;
-  message: string;
-  created_at: string;
-}
-
 export const contactService = {
-  // saves the message and says which inbox it should go to
-  send: (input: ContactInput) => http<{ to: string | null }>('/contact', { method: 'POST', body: input }),
-  getAll: () => http<ContactMessage[]>('/admin/messages'),
+  // emails the message to the store and a receipt to the customer; `receipt` is false when the copy couldn't be sent
+  send: (input: ContactInput) => http<{ to: string; receipt: boolean }>('/contact', { method: 'POST', body: input }),
 };

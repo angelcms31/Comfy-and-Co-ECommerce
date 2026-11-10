@@ -37,4 +37,3 @@ export const STORE_HOURS = 'Mon–Sat, 9AM–6PM';
 export const STORE_PHONE = '+63 912 345 6789';
 export const STORE_EMAIL = 'comfyandco@gmail.com';
 export const ACCOUNT_DELETE_DAYS = 30; // a deactivated account is deleted this many days later (backend DELETE_AFTER_DAYS)
-export const STORE_SOCIAL = '@comfyandco';

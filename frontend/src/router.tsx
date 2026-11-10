@@ -14,7 +14,6 @@ import DashboardPage from '@/pages/admin/DashboardPage';
 import InventoryPage from '@/pages/admin/InventoryPage';
 import AdminOrdersPage from '@/pages/admin/OrdersPage';
 import AdminReviewsPage from '@/pages/admin/ReviewsPage';
-import AdminMessagesPage from '@/pages/admin/MessagesPage';
 import AdminChatsPage from '@/pages/admin/ChatsPage';
 import DefectsPage from '@/pages/admin/DefectsPage';
 import SettingsPage from '@/pages/admin/SettingsPage';
@@ -93,7 +92,6 @@ export const router = createBrowserRouter([
           { path: 'reviews', element: <AdminReviewsPage /> },
           { path: 'chats', element: <AdminChatsPage /> },
           { path: 'suppliers', element: <DefectsPage /> },
-          { path: 'messages', element: <AdminMessagesPage /> },
           { path: 'settings', element: <RequireAdmin superOnly><SettingsPage /></RequireAdmin> },
         ],
       },

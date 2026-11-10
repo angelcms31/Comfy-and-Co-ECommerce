@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Mail, Menu, MessageCircle, Package, Settings, ShoppingCart, Star, Store, Truck, X } from 'lucide-react';
+import { LayoutDashboard, Menu, MessageCircle, Package, Settings, ShoppingCart, Star, Store, Truck, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { usePolling } from '@/hooks/usePolling';
@@ -17,7 +17,6 @@ const links = [
   { to: '/admin/orders', label: 'Orders', icon: ShoppingCart },
   { to: '/admin/chats', label: 'Chats', icon: MessageCircle },
   { to: '/admin/reviews', label: 'Reviews', icon: Star },
-  { to: '/admin/messages', label: 'Messages', icon: Mail },
   { to: '/admin/suppliers', label: 'Suppliers', icon: Truck },
 ];
 const settingsLink = { to: '/admin/settings', label: 'Settings', icon: Settings };

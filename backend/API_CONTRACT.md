@@ -106,8 +106,7 @@ Each user has one `wishlist_col`. Create it on the first add. All return `Wishli
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| POST | `/contact` | `{ name, email, subject, message }`, subject is `order`, `refund`, `product` or `other` | `{ to }`, the inbox from `CONTACT_EMAIL_TO`; saved for the admin, then the frontend opens Gmail with the message and the customer presses Send. Up to 10 an hour per visitor or email |
-| GET | `/admin/messages` | – | The latest 200 messages, newest first (admin) |
+| POST | `/contact` | `{ name, email, subject, message }`, subject is `order`, `refund`, `product` or `other` | `{ to, receipt }`. Emails the message to `CONTACT_EMAIL_TO` (or the store's support email) with Reply-To set to the customer, then a receipt to the customer (`receipt` false if that copy failed). 503 when SMTP isn't set up, 502 when the store email can't be sent. Up to 10 an hour per visitor or email; rows in `contact_message` are only a log |
 
 ## Orders
 

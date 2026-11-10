@@ -3,11 +3,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Mail, MapPin, Map as MapIcon, Phone, Send } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input, { Select, Textarea } from '@/components/ui/Input';
-import SocialIcons from '@/components/ui/SocialIcons';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { useStoreInfo } from '@/hooks/useStoreInfo';
-import { MAX_MESSAGE_WORDS, STORE_SOCIAL } from '@/lib/constants';
+import { MAX_MESSAGE_WORDS } from '@/lib/constants';
 import { cn } from '@/lib/cn';
 import { emailError } from '@/lib/email';
 import { contactService } from '@/services/contactService';
@@ -68,21 +67,12 @@ export default function ContactPage() {
     setErrors(found);
     if (Object.keys(found).length) return;
 
-    // opened right away because browsers block new tabs that only open after waiting for the server
-    const gmail = window.open('', '_blank');
-    if (gmail) gmail.opener = null;
     setSending(true);
     try {
-      const { to } = await contactService.send({ name: form.name.trim(), email: form.email.trim(), subject: form.subject, message: form.message.trim() });
-      const subject = SUBJECTS.find((s) => s.value === form.subject)?.label ?? 'Inquiry';
-      const body = `${form.message.trim()}\n\nFrom: ${form.name.trim()} (${form.email.trim()})`;
-      const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to ?? store.support_email)}&su=${encodeURIComponent(`[Comfy&Co] ${subject}`)}&body=${encodeURIComponent(body)}`;
-      if (gmail) gmail.location.href = url;
-      else window.location.href = url;
-      toast.info("Almost done! We've prepared your message in Gmail. Hit Send there to deliver it.");
+      const { receipt } = await contactService.send({ name: form.name.trim(), email: form.email.trim(), subject: form.subject, message: form.message.trim() });
+      toast.success(receipt ? `Message sent! We emailed a copy to ${form.email.trim()}.` : 'Message sent! We usually reply within 1–2 business days.');
       setForm((f) => ({ ...f, subject: '', message: '' }));
     } catch (err) {
-      gmail?.close();
       toast.error(err instanceof Error ? err.message : 'Could not send your message');
     } finally {
       setSending(false);
@@ -128,13 +118,6 @@ export default function ContactPage() {
               {store.support_email}
             </a>
           </Info>
-          <div className="border-t border-line pt-4">
-            <p className="text-sm font-semibold text-ink">Follow us on our social media</p>
-            <p className="mt-2 flex items-center gap-3 text-forest">
-              <SocialIcons />
-              <span className="text-sm text-ink">{STORE_SOCIAL}</span>
-            </p>
-          </div>
         </div>
 
         <form onSubmit={onSubmit} noValidate className="flex flex-col rounded-card border border-forest/30 bg-mint-light p-5 sm:p-7">

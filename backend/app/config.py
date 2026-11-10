@@ -14,8 +14,15 @@ FRONTEND_URLS = [u.strip() for u in os.getenv("FRONTEND_URLS", "http://localhost
 
 IMAGE_BUCKET = os.getenv("IMAGE_BUCKET", "products")
 
-# the inbox Contact Us messages are addressed to. Without it they go to the store's support email.
+# the inbox Contact Us messages are sent to. Without it they go to the store's support email (Settings > Store Info).
 CONTACT_EMAIL_TO = os.getenv("CONTACT_EMAIL_TO", "")
+
+# the account that sends email (Contact Us messages and receipts). See app/mailer.py for the Gmail setup.
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "").replace(" ", "")  # Google shows app passwords with spaces
+SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Comfy&Co")
 LOW_STOCK_LIMIT = 5
 DELETE_AFTER_DAYS = 30  # a deactivated account is deleted this many days later
 DELIVERY_FEE = 100  # standard delivery, store pickup is free
