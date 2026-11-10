@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { MAX_SEARCH } from '@/lib/constants';
 import { CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -70,6 +71,7 @@ export function SearchBox({ value, onChange, placeholder, className }: { value: 
   return (
     <input
       type="search"
+      maxLength={MAX_SEARCH}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}

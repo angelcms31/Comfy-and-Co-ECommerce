@@ -16,6 +16,7 @@ import type { OrderWithItems } from '@/types/models';
 import { cn } from '@/lib/cn';
 import { formatDate } from '@/lib/dates';
 import { firstImage } from '@/lib/images';
+import { MAX_SEARCH } from '@/lib/constants';
 import { formatPeso } from '@/lib/pricing';
 import { ORDER_TABS, orderTab, parseShipping, type OrderTab } from '@/lib/tracking';
 
@@ -254,6 +255,7 @@ export default function MyOrdersPage() {
         <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted" />
         <input
           type="search"
+          maxLength={MAX_SEARCH}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by order number, product name, or date"

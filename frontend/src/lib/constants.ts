@@ -9,6 +9,7 @@ export const MAX_LOGIN_ATTEMPTS = 5;
 export const MAX_EMAIL = 30;
 export const MAX_PASSWORD = 30;
 export const MAX_MESSAGE_WORDS = 200; // Contact Us message
+export const MAX_SEARCH = 30; // every search box
 
 export const COLLECTIONS = [
   { value: 'all', label: 'All products' },

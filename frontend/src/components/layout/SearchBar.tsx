@@ -5,6 +5,7 @@ import PriceTag from '@/components/ui/PriceTag';
 import { cn } from '@/lib/cn';
 import { firstImage } from '@/lib/images';
 import { displayVariant, isBuyable } from '@/lib/product';
+import { MAX_SEARCH } from '@/lib/constants';
 import { productService } from '@/services/productService';
 import type { ProductWithVariants } from '@/types/models';
 
@@ -99,6 +100,7 @@ export default function SearchBar({ className }: { className?: string }) {
       <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted" />
       <input
         type="search"
+        maxLength={MAX_SEARCH}
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
