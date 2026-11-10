@@ -198,6 +198,10 @@ Every change below is written to `audit_log` (who, what, IP, device).
 | GET | `/admin/defects/order/{order_id}` | – | the order's items, refund reason and photos, to start a report from a refund |
 | POST | `/admin/defects` | `{ prod_var_id, quantity, defect_type, source, order_id?, notes?, photos }` | the report. `source`: `receiving` / `storage` (takes the units out of stock) / `customer_return` (needs `order_id`) |
 | PATCH | `/admin/defects/{defect_id}` | `{ status, notes? }` | the report. Reported → Returned to supplier → Replaced (units go back into stock) / Credited; Reported → Credited |
+| GET | `/admin/purchase-orders` | – | restock orders with `items`, open ones (Ordered / Partly received) first |
+| POST | `/admin/purchase-orders` | `{ supplier_id, expected_date?, notes?, items: [{ prod_var_id, quantity, unit_cost? }] }` | the order; every item must be in one of the supplier's categories |
+| POST | `/admin/purchase-orders/{po_id}/receive` | `{ items: [{ po_item_id, good, damaged, defect_type? }], notes? }` | the order. `good` units are added to `prod_var.stocks`; `damaged` units become a `receiving` defect report tied to the order (`po_id`). Status becomes Received when nothing is left, else Partly received |
+| PATCH | `/admin/purchase-orders/{po_id}` | `{ status: "Cancelled" }` and/or `{ expected_date?, notes? }` | the order; cancelling marks the units still to come as cancelled, received ones stay in stock |
 
 ## Super Admin only (403 for regular admins)
 

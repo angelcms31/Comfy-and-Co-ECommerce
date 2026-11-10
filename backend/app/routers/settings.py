@@ -24,7 +24,7 @@ ACTION_FILTERS = {
     "reviews": ["review"],
     "admins": ["admin account", "role of", "password of"],
     "settings": ["settings", "policies", "logged out"],
-    "inventory": ["supplier", "item issue", "defect"],
+    "inventory": ["supplier", "item issue", "defect", "restock order"],
 }
 
 

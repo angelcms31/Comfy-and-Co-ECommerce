@@ -16,6 +16,7 @@ import {
   type DefectSource,
   type Supplier,
 } from '@/services/defectService';
+import { MAX_SEARCH } from '@/lib/constants';
 import { uploadService } from '@/services/uploadService';
 import type { ProductWithVariants } from '@/types/models';
 
@@ -145,7 +146,7 @@ export default function DefectFormModal({ open, onClose, onSaved, products, supp
         )}
 
         <div className="space-y-2">
-          {!order && <Input label="Item" placeholder="Search product name, color or SKU" value={search} onChange={(e) => setSearch(e.target.value)} />}
+          {!order && <Input label="Item" placeholder="Search product name, color or SKU" maxLength={MAX_SEARCH} value={search} onChange={(e) => setSearch(e.target.value)} />}
           <Select
             label={order ? 'Item' : undefined}
             aria-label="Pick the item"
@@ -181,7 +182,7 @@ export default function DefectFormModal({ open, onClose, onSaved, products, supp
         )}
 
         <div className="grid gap-4 sm:grid-cols-[8rem_1fr]">
-          <Input label="Quantity" type="number" min={1} value={quantity} onChange={(e) => setQuantity(e.target.value)} error={errors.quantity} />
+          <Input label="Quantity" inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 5))} error={errors.quantity} />
           <div className="space-y-2">
             <Select label="What's wrong?" value={type} onChange={(e) => setType(e.target.value)} error={type === OTHER ? undefined : errors.type}>
               <option value="" disabled>

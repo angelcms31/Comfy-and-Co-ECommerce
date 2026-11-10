@@ -241,6 +241,47 @@ class DefectStatusIn(BaseModel):
     notes: str | None = Field(default=None, max_length=1000)
 
 
+# ---------- restock orders ----------
+
+class PurchaseItemIn(BaseModel):
+    prod_var_id: int
+    quantity: int = Field(gt=0, le=10000)
+    unit_cost: float | None = Field(default=None, ge=0, le=10_000_000)
+
+
+class PurchaseOrderIn(BaseModel):
+    supplier_id: int
+    expected_date: date | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+    items: list[PurchaseItemIn] = Field(min_length=1, max_length=100)
+
+    @field_validator("items")
+    @classmethod
+    def no_repeats(cls, items: list[PurchaseItemIn]) -> list[PurchaseItemIn]:
+        ids = [i.prod_var_id for i in items]
+        if len(ids) != len(set(ids)):
+            raise ValueError("The same item is listed twice")
+        return items
+
+
+class ReceiveItemIn(BaseModel):
+    po_item_id: int
+    good: int = Field(ge=0, le=10000)      # units in good condition, added to stock
+    damaged: int = Field(ge=0, le=10000)   # units reported as item issues
+    defect_type: str | None = Field(default=None, max_length=80)
+
+
+class ReceiveIn(BaseModel):
+    items: list[ReceiveItemIn] = Field(min_length=1, max_length=100)
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class PurchaseOrderPatch(BaseModel):
+    status: Literal["Cancelled"] | None = None
+    expected_date: date | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+
+
 # ---------- chat ----------
 
 class ChatIn(BaseModel):

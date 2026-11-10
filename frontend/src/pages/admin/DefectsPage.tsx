@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, Images, PackageX, Pencil, Plus, Truck } from 'lucide-react';
+import { AlertTriangle, ClipboardList, Images, PackageX, Pencil, Plus, Truck } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input, { Select, Textarea } from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
@@ -12,14 +12,20 @@ import { cn } from '@/lib/cn';
 import { emailError } from '@/lib/email';
 import { formatDate, formatDateTime } from '@/lib/dates';
 import { parseImages } from '@/lib/images';
+import { formatPeso } from '@/lib/pricing';
 import {
   defectService,
   DEFECT_NEXT,
   HIGH_DEFECT_RATE,
+  isPurchaseOpen,
+  purchaseTotal,
   SOURCE_LABEL,
+  unitsLeft,
+  type CategorySupplier,
   type DefectOrder,
   type DefectReport,
   type DefectStatus,
+  type PurchaseOrder,
   type Supplier,
   type SupplierInput,
 } from '@/services/defectService';
@@ -27,8 +33,10 @@ import { productService } from '@/services/productService';
 import AdminPageHeader from './AdminPageHeader';
 import { Card, FilterPills, SearchBox, StatCard } from './AdminUi';
 import DefectFormModal from './DefectFormModal';
+import { NewRestockButton, PoStatus, PurchaseOrderDetails, PurchaseOrderModal } from './RestockModals';
 
-type Tab = 'reports' | 'suppliers';
+type Tab = 'restock' | 'reports' | 'suppliers';
+type PoFilter = 'open' | 'all';
 type StatusFilter = 'open' | 'all' | DefectStatus;
 
 const STATUS_STYLE: Record<DefectStatus, string> = {
@@ -43,17 +51,32 @@ const rateOf = (s: Supplier) => (s.units_sold ? (s.defective_units / s.units_sol
 
 const EMPTY_SUPPLIER: SupplierInput = { supplier_name: '', contact_person: '', phone: '', email: '', address: '', is_active: true };
 
-function SupplierModal({ supplier, open, onClose, onSaved }: { supplier: Supplier | null; open: boolean; onClose: () => void; onSaved: () => void }) {
+interface SupplierModalProps {
+  supplier: Supplier | null;
+  suppliers: Supplier[];
+  categories: CategorySupplier[];
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+// add or edit a supplier, and tick the categories it supplies (a category has one supplier, so ticking it moves it here)
+function SupplierModal({ supplier, suppliers, categories, open, onClose, onSaved }: SupplierModalProps) {
   const toast = useToast();
   const [form, setForm] = useState<SupplierInput>(EMPTY_SUPPLIER);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [mailError, setMailError] = useState<string | null>(null);
+
+  const mine = new Set(categories.filter((c) => supplier && c.supplier_id === supplier.supplier_id).map((c) => c.item_categ_id));
+  const nameOf = (id: number | null) => suppliers.find((s) => s.supplier_id === id)?.supplier_name;
 
   useEffect(() => {
     if (!open) return;
     setError('');
     setMailError(null);
+    setPicked(new Set(categories.filter((c) => supplier && c.supplier_id === supplier.supplier_id).map((c) => c.item_categ_id)));
     setForm(
       supplier
         ? {
@@ -66,19 +89,30 @@ function SupplierModal({ supplier, open, onClose, onSaved }: { supplier: Supplie
           }
         : EMPTY_SUPPLIER,
     );
-  }, [open, supplier]);
+  }, [open, supplier]); // categories only matter at the moment the modal opens
 
   const set = (key: keyof SupplierInput) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const toggle = (id: number) =>
+    setPicked((p) => {
+      const next = new Set(p);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const save = async () => {
     if (!form.supplier_name.trim()) return setError('Please enter the supplier name');
     const badMail = form.email?.trim() ? emailError(form.email) : null;
     setMailError(badMail);
     if (badMail) return;
+    const added = [...picked].filter((id) => !mine.has(id));
+    if (added.length && !form.is_active) return toast.error('An inactive supplier can’t take categories. Set it active first');
     setBusy(true);
     try {
-      if (supplier) await defectService.editSupplier(supplier.supplier_id, form);
-      else await defectService.addSupplier(form);
+      const saved = supplier ? await defectService.editSupplier(supplier.supplier_id, form) : await defectService.addSupplier(form);
+      // categories ticked now go to this supplier, unticked ones are left with no supplier
+      for (const id of added) await defectService.setCategorySupplier(id, saved.supplier_id);
+      for (const id of mine) if (!picked.has(id)) await defectService.setCategorySupplier(id, null);
       toast.success(supplier ? 'Supplier saved' : 'Supplier added');
       onSaved();
     } catch (err) {
@@ -112,6 +146,30 @@ function SupplierModal({ supplier, open, onClose, onSaved }: { supplier: Supplie
         </div>
         <Input label="Email (optional)" type="email" maxLength={100} value={form.email ?? ''} onChange={set('email')} error={mailError} />
         <Textarea label="Address (optional)" rows={2} value={form.address ?? ''} onChange={set('address')} maxLength={300} />
+
+        <fieldset>
+          <legend className="text-sm font-medium text-ink">Categories this supplier supplies</legend>
+          <p className="mt-0.5 text-xs text-muted">Every product in a ticked category comes from this supplier. A category can only have one.</p>
+          <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
+            {categories.map((c) => {
+              const other = c.supplier_id && !mine.has(c.item_categ_id) ? nameOf(c.supplier_id) : null;
+              return (
+                <li key={c.item_categ_id}>
+                  <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-forest has-[:checked]:bg-mint-light">
+                    <input type="checkbox" className="mt-0.5 size-4 accent-forest" checked={picked.has(c.item_categ_id)} onChange={() => toggle(c.item_categ_id)} />
+                    <span>
+                      {c.item_category} <span className="text-xs text-muted">({c.product_count})</span>
+                      {other && picked.has(c.item_categ_id) && <span className="block text-xs text-amber">Moves here from {other}</span>}
+                      {other && !picked.has(c.item_categ_id) && <span className="block text-xs text-muted">{other}</span>}
+                      {!c.supplier_id && !picked.has(c.item_categ_id) && <span className="block text-xs text-coral-dark">No supplier yet</span>}
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </fieldset>
+
         {supplier && (
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="size-4 accent-forest" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
@@ -205,9 +263,13 @@ export default function DefectsPage() {
   const [viewing, setViewing] = useState<DefectReport | null>(null);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [supplierModal, setSupplierModal] = useState(false);
+  const [poFilter, setPoFilter] = useState<PoFilter>('open');
+  const [poModal, setPoModal] = useState(false);
+  const [viewingPo, setViewingPo] = useState<PurchaseOrder | null>(null);
 
   const defects = useAsync(() => defectService.getDefects(), []);
   const supplierData = useAsync(() => defectService.getSuppliers(), []);
+  const purchases = useAsync(() => defectService.getPurchaseOrders(), []);
   const products = useAsync(() => productService.getAll({ includeUnavailable: true }), []);
 
   // opened from "Report issue to supplier" on a refund (Orders page): start the form with that order
@@ -239,9 +301,22 @@ export default function DefectsPage() {
   }, [all, statusFilter, supplierFilter, q]);
 
   const openCount = all.filter(isOpen).length;
-  const openUnits = all.filter(isOpen).reduce((n, d) => n + d.quantity, 0);
   const noSupplier = categories.filter((c) => !c.supplier_id).length;
   const flagged = suppliers.filter((s) => (rateOf(s) ?? 0) >= HIGH_DEFECT_RATE).length;
+
+  const pos = purchases.data ?? [];
+  const openPos = pos.filter(isPurchaseOpen);
+  const unitsComing = openPos.reduce((n, po) => n + unitsLeft(po), 0);
+  const poRows = poFilter === 'open' ? openPos : pos;
+
+  // a restock order changed (received or cancelled): refresh the row, and stock / issues / supplier counts it touched
+  const replacePo = (po: PurchaseOrder) => {
+    purchases.setData(pos.map((x) => (x.po_id === po.po_id ? po : x)));
+    if (viewingPo?.po_id === po.po_id) setViewingPo(po);
+    defects.reload();
+    supplierData.reload();
+    products.reload();
+  };
 
   const replaceDefect = (d: DefectReport) => {
     defects.setData(all.map((x) => (x.defect_id === d.defect_id ? d : x)));
@@ -256,15 +331,6 @@ export default function DefectsPage() {
       if (status === 'Replaced') products.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not update the report');
-    }
-  };
-
-  const setCategorySupplier = async (categId: number, value: string) => {
-    try {
-      supplierData.setData(await defectService.setCategorySupplier(categId, value ? Number(value) : null));
-      toast.success('Category supplier saved');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save');
     }
   };
 
@@ -293,6 +359,7 @@ export default function DefectsPage() {
         <span className="text-xs">
           {SOURCE_LABEL[d.source]}
           {d.order_num && <span className="block text-muted">Order #{d.order_num}</span>}
+          {d.po_id && <span className="block text-muted">Restock #PO-{d.po_id}</span>}
         </span>
       ),
     },
@@ -380,24 +447,80 @@ export default function DefectsPage() {
     },
   ];
 
-  const loading = (defects.loading && !defects.data) || (supplierData.loading && !supplierData.data);
-  const error = defects.error || supplierData.error;
+  const poColumns: Column<PurchaseOrder>[] = [
+    { key: 'id', header: 'Order', render: (po) => <span className="whitespace-nowrap font-medium">#PO-{po.po_id}</span> },
+    { key: 'date', header: 'Ordered', render: (po) => <span className="whitespace-nowrap">{formatDate(po.created_at)}</span> },
+    { key: 'supplier', header: 'Supplier', className: 'min-w-40', render: (po) => po.supplier_name },
+    {
+      key: 'items',
+      header: 'Items',
+      className: 'min-w-48',
+      render: (po) => (
+        <span className="text-xs">
+          {po.items
+            .slice(0, 2)
+            .map((i) => `${i.quantity} × ${i.item_name}`)
+            .join(', ')}
+          {po.items.length > 2 && <span className="text-muted"> +{po.items.length - 2} more</span>}
+        </span>
+      ),
+    },
+    {
+      key: 'progress',
+      header: 'Arrived',
+      render: (po) => {
+        const ordered = po.items.reduce((n, i) => n + i.quantity, 0);
+        const left = unitsLeft(po);
+        return (
+          <span className="whitespace-nowrap">
+            {ordered - left} / {ordered}
+            {po.status === 'Cancelled' && left > 0 && <span className="block text-xs text-muted">{left} cancelled</span>}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      render: (po) => {
+        const total = purchaseTotal(po);
+        return total === null ? <span className="text-muted">–</span> : <span className="whitespace-nowrap">{formatPeso(total)}</span>;
+      },
+    },
+    { key: 'expected', header: 'Expected', render: (po) => (po.expected_date ? <span className="whitespace-nowrap">{formatDate(po.expected_date)}</span> : <span className="text-muted">–</span>) },
+    { key: 'status', header: 'Status', render: (po) => <PoStatus status={po.status} /> },
+    {
+      key: 'view',
+      header: '',
+      render: (po) => (
+        <button onClick={() => setViewingPo(po)} className="whitespace-nowrap text-sm text-forest hover:underline">
+          {isPurchaseOpen(po) ? 'Receive' : 'View'}
+        </button>
+      ),
+    },
+  ];
+
+  const loading = (defects.loading && !defects.data) || (supplierData.loading && !supplierData.data) || (purchases.loading && !purchases.data);
+  const error = defects.error || supplierData.error || purchases.error;
 
   return (
     <div>
       <AdminPageHeader
         title="Suppliers"
-        subtitle="Your supplier for each category, and items with issues to send back to them."
+        subtitle="Order stock from your suppliers, receive it into inventory, and send back items with issues."
         actions={
-          <Button
-            onClick={() => {
-              setFromOrder(null);
-              setReporting(true);
-            }}
-            disabled={!products.data}
-          >
-            <PackageX className="size-4" /> Report item issue
-          </Button>
+          <>
+            <NewRestockButton onClick={() => setPoModal(true)} disabled={!products.data || !suppliers.length} />
+            <Button
+              onClick={() => {
+                setFromOrder(null);
+                setReporting(true);
+              }}
+              disabled={!products.data}
+            >
+              <PackageX className="size-4" /> Report item issue
+            </Button>
+          </>
         }
       />
 
@@ -409,15 +532,16 @@ export default function DefectsPage() {
           onRetry={() => {
             defects.reload();
             supplierData.reload();
+            purchases.reload();
           }}
         />
       ) : (
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+            <StatCard label="Restock orders on the way" value={openPos.length} icon={<ClipboardList className="size-4" />} tone={openPos.length ? 'amber' : 'forest'} />
+            <StatCard label="Units still to arrive" value={unitsComing} icon={<Truck className="size-4" />} />
             <StatCard label="Open item issues" value={openCount} icon={<PackageX className="size-4" />} tone={openCount ? 'coral' : 'forest'} />
-            <StatCard label="Units with issues (open)" value={openUnits} icon={<AlertTriangle className="size-4" />} />
-            <StatCard label={`Suppliers over ${HIGH_DEFECT_RATE}%`} value={flagged} icon={<Truck className="size-4" />} tone={flagged ? 'coral' : 'forest'} />
-            <StatCard label="Categories without supplier" value={noSupplier} icon={<Truck className="size-4" />} tone={noSupplier ? 'amber' : 'forest'} />
+            <StatCard label={`Suppliers over ${HIGH_DEFECT_RATE}% issues`} value={flagged} icon={<AlertTriangle className="size-4" />} tone={flagged ? 'coral' : 'forest'} />
           </div>
 
           <FilterPills
@@ -425,9 +549,41 @@ export default function DefectsPage() {
             onChange={setTab}
             options={[
               { value: 'suppliers', label: `Suppliers (${suppliers.length})` },
-              { value: 'reports', label: `Item issues (${all.length})` },
+              { value: 'restock', label: `Restock orders (${openPos.length} open)` },
+              { value: 'reports', label: `Item issues (${openCount} open)` },
             ]}
           />
+
+          {tab === 'restock' && (
+            <Card
+              title="Restock orders"
+              actions={
+                <div className="flex flex-wrap items-center gap-3">
+                  <FilterPills
+                    value={poFilter}
+                    onChange={setPoFilter}
+                    options={[
+                      { value: 'open', label: `On the way (${openPos.length})` },
+                      { value: 'all', label: `All (${pos.length})` },
+                    ]}
+                  />
+                  <NewRestockButton size="sm" onClick={() => setPoModal(true)} disabled={!products.data || !suppliers.length} />
+                </div>
+              }
+            >
+              {poRows.length === 0 ? (
+                <EmptyState
+                  title={pos.length ? 'Nothing on the way' : 'No restock orders yet'}
+                  message={pos.length ? 'Every restock order has been received or cancelled.' : 'Use "New restock order" to order stock from a supplier. When it arrives, receive it here and it goes into inventory.'}
+                />
+              ) : (
+                <>
+                  <Table columns={poColumns} rows={poRows} rowKey={(po) => po.po_id} />
+                  <p className="mt-3 text-xs text-muted">Open Receive when a delivery arrives: good units are added to stock, damaged ones become item issues for the supplier.</p>
+                </>
+              )}
+            </Card>
+          )}
 
           {/* reports only point to a supplier once its category has one */}
           {noSupplier > 0 && tab === 'reports' && (
@@ -447,7 +603,7 @@ export default function DefectsPage() {
             </div>
           )}
 
-          {tab === 'reports' ? (
+          {tab === 'reports' && (
             <Card>
               <div className="mb-4 flex flex-wrap items-center gap-3">
                 <FilterPills
@@ -486,38 +642,19 @@ export default function DefectsPage() {
                 <Table columns={defectColumns} rows={rows} rowKey={(d) => d.defect_id} />
               )}
             </Card>
-          ) : (
+          )}
+
+          {tab === 'suppliers' && (
             <>
-              <Card title="Supplier per category" actions={<span className="text-xs text-muted">Every product in a category comes from its supplier.</span>}>
-                <ul className="divide-y divide-line">
-                  {categories.map((c) => (
-                    <li key={c.item_categ_id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                      <span>
-                        <span className="font-medium text-ink">{c.item_category}</span>
-                        <span className="ml-2 text-xs text-muted">{c.product_count} products</span>
-                      </span>
-                      <div className="w-56">
-                        <Select
-                          aria-label={`Supplier for ${c.item_category}`}
-                          value={c.supplier_id ?? ''}
-                          onChange={(e) => setCategorySupplier(c.item_categ_id, e.target.value)}
-                          invalid={!c.supplier_id}
-                          className="h-10 !py-0"
-                        >
-                          <option value="">No supplier yet</option>
-                          {suppliers
-                            .filter((s) => s.is_active || s.supplier_id === c.supplier_id)
-                            .map((s) => (
-                              <option key={s.supplier_id} value={s.supplier_id}>
-                                {s.supplier_name}
-                              </option>
-                            ))}
-                        </Select>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
+              {noSupplier > 0 && (
+                <div className="flex items-start gap-2 rounded-card border border-amber/40 bg-butter-light px-4 py-3 text-sm text-ink">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber" />
+                  <span>
+                    <span className="font-semibold">No supplier yet for {categories.filter((c) => !c.supplier_id).map((c) => c.item_category).join(', ')}.</span>{' '}
+                    Open a supplier with Edit and tick the categories it supplies.
+                  </span>
+                </div>
+              )}
 
               <Card
                 title="Suppliers"
@@ -534,7 +671,7 @@ export default function DefectsPage() {
                 }
               >
                 {suppliers.length === 0 ? (
-                  <EmptyState title="No suppliers yet" message="Add your suppliers, then pick one for each category above." />
+                  <EmptyState title="No suppliers yet" message="Add a supplier and tick the categories it supplies." />
                 ) : (
                   <>
                     <Table columns={supplierColumns} rows={suppliers} rowKey={(s) => s.supplier_id} />
@@ -567,6 +704,8 @@ export default function DefectsPage() {
       <SupplierModal
         open={supplierModal}
         supplier={editingSupplier}
+        suppliers={suppliers}
+        categories={categories}
         onClose={() => setSupplierModal(false)}
         onSaved={() => {
           setSupplierModal(false);
@@ -574,6 +713,20 @@ export default function DefectsPage() {
         }}
       />
       <DefectDetails report={viewing} onClose={() => setViewing(null)} onSaved={replaceDefect} />
+      <PurchaseOrderModal
+        open={poModal}
+        onClose={() => setPoModal(false)}
+        onSaved={(po) => {
+          setPoModal(false);
+          setTab('restock');
+          purchases.setData([po, ...pos]);
+          supplierData.reload();
+        }}
+        products={products.data ?? []}
+        suppliers={suppliers}
+        categories={categories}
+      />
+      <PurchaseOrderDetails po={viewingPo} onClose={() => setViewingPo(null)} onChanged={replacePo} />
     </div>
   );
 }

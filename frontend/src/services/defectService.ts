@@ -16,6 +16,7 @@ export interface Supplier {
   open_count: number; // Reported or Returned to supplier
   defective_units: number;
   units_sold: number; // from its categories, cancelled orders left out
+  open_po_count: number; // restock orders still on the way
 }
 
 export interface CategorySupplier {
@@ -45,9 +46,51 @@ export interface DefectReport {
   notes: string | null;
   photos: string | null; // comma separated, use parseImages()
   status: DefectStatus;
+  po_id: number | null; // set when found while receiving a restock order
   reported_by_name: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ---------- restock orders ----------
+
+export type PurchaseStatus = 'Ordered' | 'Partly received' | 'Received' | 'Cancelled';
+
+export interface PurchaseItem {
+  po_item_id: number;
+  prod_var_id: number | null;
+  item_name: string;
+  sku: string;
+  quantity: number;
+  unit_cost: number | null;
+  received_qty: number; // good units, already in stock
+  damaged_qty: number; // reported as item issues
+}
+
+export interface PurchaseOrder {
+  po_id: number;
+  supplier_id: number;
+  supplier_name: string;
+  status: PurchaseStatus;
+  expected_date: string | null;
+  notes: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+  received_at: string | null;
+  items: PurchaseItem[];
+}
+
+export interface PurchaseOrderInput {
+  supplier_id: number;
+  expected_date?: string | null;
+  notes?: string;
+  items: { prod_var_id: number; quantity: number; unit_cost?: number | null }[];
+}
+
+export interface ReceiveInput {
+  items: { po_item_id: number; good: number; damaged: number; defect_type?: string }[];
+  notes?: string;
 }
 
 export interface DefectInput {
@@ -86,7 +129,19 @@ export const defectService = {
   report: (input: DefectInput) => http<DefectReport>('/admin/defects', { method: 'POST', body: input }),
   update: (id: number, change: { status: DefectStatus; notes?: string }) =>
     http<DefectReport>(`/admin/defects/${id}`, { method: 'PATCH', body: change }),
+
+  getPurchaseOrders: () => http<PurchaseOrder[]>('/admin/purchase-orders'),
+  createPurchaseOrder: (input: PurchaseOrderInput) => http<PurchaseOrder>('/admin/purchase-orders', { method: 'POST', body: input }),
+  receivePurchaseOrder: (id: number, input: ReceiveInput) => http<PurchaseOrder>(`/admin/purchase-orders/${id}/receive`, { method: 'POST', body: input }),
+  cancelPurchaseOrder: (id: number) => http<PurchaseOrder>(`/admin/purchase-orders/${id}`, { method: 'PATCH', body: { status: 'Cancelled' } }),
 };
+
+export const isPurchaseOpen = (po: PurchaseOrder) => po.status === 'Ordered' || po.status === 'Partly received';
+// units still to come
+export const unitsLeft = (po: PurchaseOrder) => po.items.reduce((n, i) => n + i.quantity - i.received_qty - i.damaged_qty, 0);
+// purchase total when every line has a cost, otherwise null
+export const purchaseTotal = (po: PurchaseOrder) =>
+  po.items.every((i) => i.unit_cost !== null) ? po.items.reduce((n, i) => n + i.quantity * (i.unit_cost ?? 0), 0) : null;
 
 // what each status can change to; Replaced and Credited are final
 export const DEFECT_NEXT: Record<DefectStatus, DefectStatus[]> = {
