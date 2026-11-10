@@ -182,7 +182,8 @@ Every change below is written to `audit_log` (who, what, IP, device).
 | POST | `/admin/uploads` | multipart `file` (JPG / PNG / WEBP, max 5 MB) | `{ url }`, put it in `prod_var.images` |
 | GET | `/admin/orders` | `status`, `q` (order # or customer name) | `OrderWithItems[]`, newest first, with `delivery_token` |
 | GET | `/admin/orders/{order_id}` | – | `OrderWithItems` with `delivery_token` (for the receipt's QR code) |
-| PATCH | `/admin/orders/{order_id}/status` | `{ order_stat }` | `OrderWithItems`; `Shipped` makes the `delivery_token` for the receipt's QR code; `Cancelled` / `Returned` put the stock back and are final (`Returned` only from `Shipped`) |
+| POST | `/admin/orders/{order_id}/receipt` | – | `OrderWithItems` with `delivery_token`; makes the token for the receipt's QR code (delivery orders only, GCash must be Paid). Step 1 of shipping |
+| PATCH | `/admin/orders/{order_id}/status` | `{ order_stat }` | `OrderWithItems`; a delivery order can't go `Pending` → `Shipped` until its receipt exists (400); `Cancelled` / `Returned` put the stock back and are final (`Returned` only from `Shipped`) |
 | GET | `/admin/reviews` | – | `AdminReviews`: `ProductReviews` + `pendingReplies`, `hiddenCount`; includes hidden reviews |
 | PATCH | `/admin/reviews/{review_id}` | `{ is_hidden?, is_featured? }` | `ReviewWithMeta` |
 | POST | `/admin/reviews/{review_id}/reply` | `{ reply }` | `ReviewWithMeta` |

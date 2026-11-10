@@ -27,6 +27,7 @@ export const orderService = {
   // admin
   getAll: (query: OrderQuery = {}) => http<OrderWithItems[]>('/admin/orders', { params: { status: query.status, q: query.q } }),
   getOne: (orderId: number) => http<OrderWithItems>(`/admin/orders/${orderId}`), // with the receipt's QR token
+  makeReceipt: (orderId: number) => http<OrderWithItems>(`/admin/orders/${orderId}/receipt`, { method: 'POST' }), // step 1 of shipping
   updateStatus: (orderId: number, status: OrderStat) =>
     http<OrderWithItems>(`/admin/orders/${orderId}/status`, { method: 'PATCH', body: { order_stat: status } }),
   decideGcash: (orderId: number, decision: 'confirm' | 'reject') =>

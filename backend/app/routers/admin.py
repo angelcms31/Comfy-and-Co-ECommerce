@@ -296,13 +296,40 @@ def one_order(db: Db, order_id: int, user=Depends(require_admin)):
     return queries.order_or_404(db, order_id)
 
 
-@router.patch("/orders/{order_id}/status")
-def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, user=Depends(require_admin)):
+def is_delivery(order: dict) -> bool:
+    return not order["shipping_add"].startswith("Store pickup")
+
+
+@router.post("/orders/{order_id}/receipt")
+def make_receipt(db: Db, request: Request, order_id: int, user=Depends(require_admin)):
+    """Step 1 of shipping: makes the delivery token for the receipt's QR code (the rider scans it at the door).
+    The order can only be marked Shipped once this exists, so the QR is always printed before the package leaves."""
     order = db.execute(
-        'select order_stat, order_num, payment_method, shipping_add from "order" where order_id = %s for update', (order_id,)
+        'select order_stat, order_num, payment_method, shipping_add, delivery_token from "order" where order_id = %s for update', (order_id,)
     ).fetchone()
     if not order:
         raise HTTPException(404, "Order not found")
+    if not is_delivery(order):
+        raise HTTPException(400, "This is a store pickup order, there is nothing to deliver")
+    if order["order_stat"] not in ("Pending", "Shipped"):
+        raise HTTPException(400, f"A {order['order_stat'].lower()} order has no delivery receipt")
+    if order["payment_method"] == "GCash" and queries.payment_status(order["shipping_add"])[0] != "Paid":
+        raise HTTPException(400, "Confirm the GCash payment before making the delivery receipt")
+    if not order["delivery_token"]:
+        db.execute('update "order" set delivery_token = %s where order_id = %s', (delivery.new_token(), order_id))
+        audit.log(db, request, user, f"Made the delivery receipt (QR) for order #{order['order_num']}")
+    return queries.order_or_404(db, order_id)
+
+
+@router.patch("/orders/{order_id}/status")
+def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, user=Depends(require_admin)):
+    order = db.execute(
+        'select order_stat, order_num, payment_method, shipping_add, delivery_token from "order" where order_id = %s for update', (order_id,)
+    ).fetchone()
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if body.order_stat == "Shipped" and order["order_stat"] == "Pending" and is_delivery(order) and not order["delivery_token"]:
+        raise HTTPException(400, "Generate and print the delivery receipt (QR code) first, then mark the order as shipped")
     if order["order_stat"] in ("Cancelled", "Returned") and body.order_stat != order["order_stat"]:
         raise HTTPException(400, f"A {order['order_stat'].lower()} order can't be reopened")
     if body.order_stat == "Returned" and order["order_stat"] != "Shipped":
@@ -326,11 +353,6 @@ def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, 
         )
 
     db.execute('update "order" set order_stat = %s where order_id = %s', (body.order_stat, order_id))
-    if body.order_stat == "Shipped":
-        # the QR code on the printed receipt: the Lalamove rider scans it at the door to mark the order delivered
-        db.execute(
-            'update "order" set delivery_token = %s where order_id = %s and delivery_token is null', (delivery.new_token(), order_id)
-        )
     if body.order_stat == "Delivered" and order["order_stat"] != "Delivered":
         db.execute("""update "order" set delivered_at = now(), delivered_by = 'admin' where order_id = %s""", (order_id,))
     if body.order_stat != order["order_stat"]:
