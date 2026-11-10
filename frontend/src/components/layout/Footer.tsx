@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { MapPin } from 'lucide-react';
 import { COURIERS } from '@/lib/constants';
 import { useStoreInfo } from '@/hooks/useStoreInfo';
-import SocialIcons from '@/components/ui/SocialIcons';
 import { useAuth } from '@/context/AuthContext';
 import { LogoMark } from './Logo';
 
@@ -15,7 +14,9 @@ const explore = [
   { to: '/privacy', label: 'Privacy Policy' },
 ];
 
-const badge = 'rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-forest';
+// payment and courier badges share one 2-column grid so every badge is the same width and the rows line up
+const badges = 'mx-auto grid max-w-64 grid-cols-2 gap-2 sm:mx-0';
+const badge = 'whitespace-nowrap rounded-md bg-white px-2 py-1.5 text-center text-[11px] font-semibold text-forest';
 
 export default function Footer() {
   const { user } = useAuth(); // Track order only shows when logged in
@@ -31,7 +32,6 @@ export default function Footer() {
             <MapPin className="mt-px size-3.5 shrink-0" />
             {store.address}
           </p>
-          <SocialIcons className="mt-4" />
         </div>
 
         <div className="text-center sm:text-left">
@@ -49,12 +49,12 @@ export default function Footer() {
 
         <div className="text-center sm:col-span-2 sm:text-left md:col-span-1">
           <h3 className="mb-3 font-sans text-sm font-semibold">Payment Methods</h3>
-          <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
+          <div className={badges}>
             <span className={badge}>GCash</span>
             <span className={badge}>Cash on Delivery</span>
           </div>
           <h3 className="mb-3 mt-6 font-sans text-sm font-semibold">Courier Partners</h3>
-          <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
+          <div className={badges}>
             {COURIERS.map((c) => (
               <span key={c} className={badge}>
                 {c}
