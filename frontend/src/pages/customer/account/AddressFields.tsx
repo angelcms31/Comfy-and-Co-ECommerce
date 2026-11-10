@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import Input, { Select } from '@/components/ui/Input';
 import { useAsync } from '@/hooks/useAsync';
-import { cleanMobile, isValidMobile, MOBILE_ERROR, normalizeMobile } from '@/lib/mobile';
+import { cleanMobile, isValidMobile, MOBILE_ERROR, MOBILE_LENGTH, MOBILE_REQUIRED, normalizeMobile } from '@/lib/mobile';
 import { isValidName, NAME_ERROR } from '@/lib/names';
 import { locationService } from '@/services/locationService';
 import type { UserProfile } from '@/types/models';
@@ -32,9 +32,9 @@ export function validateContact(f: ContactForm, requireAddress: boolean): Contac
   const e: ContactErrors = {};
   if (!f.full_name.trim()) e.full_name = 'Please enter your name';
   else if (!isValidName(f.full_name)) e.full_name = NAME_ERROR;
-  if (f.mobile_no.trim() || requireAddress) {
-    if (!isValidMobile(f.mobile_no)) e.mobile_no = MOBILE_ERROR;
-  }
+  // the mobile number is always required
+  if (!f.mobile_no.trim()) e.mobile_no = MOBILE_REQUIRED;
+  else if (!isValidMobile(f.mobile_no)) e.mobile_no = MOBILE_ERROR;
   const anyAddress = f.st_add.trim() || f.postal.trim() || f.city_id;
   if (requireAddress || anyAddress) {
     if (!f.st_add.trim()) e.st_add = 'Please enter your street address';
@@ -46,7 +46,7 @@ export function validateContact(f: ContactForm, requireAddress: boolean): Contac
 
 export const contactPatch = (f: ContactForm) => ({
   full_name: f.full_name.trim(),
-  mobile_no: f.mobile_no.trim() ? normalizeMobile(f.mobile_no) : null,
+  mobile_no: normalizeMobile(f.mobile_no),
   st_add: f.st_add.trim() || null,
   postal: f.postal.trim() || null,
   city_id: f.city_id ? Number(f.city_id) : null,
@@ -62,7 +62,7 @@ interface Props {
 
 const req = (on?: boolean) => (on ? <span className="text-coral-dark"> *</span> : null);
 
-export function NameMobileFields({ form, errors, onChange, required, disabled }: Props) {
+export function NameMobileFields({ form, errors, onChange, disabled }: Props) {
   return (
     <>
       <Input
@@ -74,10 +74,11 @@ export function NameMobileFields({ form, errors, onChange, required, disabled }:
         disabled={disabled}
       />
       <Input
-        label={<>Mobile Number{req(required)}</>}
+        label={<>Mobile Number{req(true)}</>}
         type="tel"
         inputMode="numeric"
         autoComplete="tel"
+        maxLength={MOBILE_LENGTH}
         placeholder="09171234567"
         value={form.mobile_no}
         onChange={(e) => onChange({ mobile_no: cleanMobile(e.target.value) })}

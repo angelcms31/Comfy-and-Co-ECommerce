@@ -75,6 +75,6 @@ export interface RegisterInput {
   full_name: string;
   email: string;
   password: string;
-  mobile_no?: string;
+  mobile_no: string;
   birthdate?: string;
 }

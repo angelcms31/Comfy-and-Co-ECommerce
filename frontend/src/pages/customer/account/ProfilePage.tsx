@@ -30,7 +30,7 @@ export default function ProfilePage() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    // mobile, birthdate and address are optional like on sign up, checkout asks for what it needs
+    // mobile is required; birthdate and address are optional like on sign up, checkout asks for what it needs
     const found: typeof errors = validateContact(form, false);
     if (birthdate && birthdate >= toDay()) found.birthdate = 'Birthdate must be in the past';
     setErrors(found);
