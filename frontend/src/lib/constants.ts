@@ -5,6 +5,10 @@ export const GCASH_QR_IMAGE = '/images/gcash-qr.png';
 export const GCASH_ACCOUNT_NAME = 'AN**L L** C.'; // written the way GCash shows it, so customers can check they're paying the right account
 export const DAILY_SALES_TARGET = 50000;
 export const MAX_LOGIN_ATTEMPTS = 5;
+// typing limits (the backend checks the same: MAX_EMAIL, MAX_PASSWORD, MAX_MESSAGE_WORDS in app/schemas.py)
+export const MAX_EMAIL = 30;
+export const MAX_PASSWORD = 30;
+export const MAX_MESSAGE_WORDS = 200; // Contact Us message
 
 export const COLLECTIONS = [
   { value: 'all', label: 'All products' },

@@ -2,7 +2,13 @@ import re
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
+
+from .emails import check_email
+
+# emails and passwords people type in are kept to 30 characters (frontend: MAX_EMAIL / MAX_PASSWORD in lib/constants.ts)
+MAX_EMAIL = 30
+MAX_PASSWORD = 30
 
 
 class LoginIn(BaseModel):
@@ -20,14 +26,27 @@ def check_name(value: str | None) -> str | None:
     return value
 
 
+# PH mobile numbers: exactly 11 digits starting with 09 (frontend/src/lib/mobile.ts has the same rule)
+MOBILE = re.compile(r"^09\d{9}$")
+
+
+def check_mobile(value: str | None) -> str:
+    # runs only when the field is sent, so leaving it out of a profile update is fine, but it can't be cleared
+    if value is None or not MOBILE.match(value.strip()):
+        raise ValueError("Enter an 11-digit mobile number like 09171234567")
+    return value.strip()
+
+
 class RegisterIn(BaseModel):
     full_name: str = Field(min_length=1)
-    email: EmailStr
-    password: str = Field(min_length=8)
-    mobile_no: str | None = None
+    email: str = Field(max_length=MAX_EMAIL)
+    password: str = Field(min_length=8, max_length=MAX_PASSWORD)
+    mobile_no: str
     birthdate: date | None = None
 
     _name = field_validator("full_name")(check_name)
+    _mobile = field_validator("mobile_no")(check_mobile)
+    _email = field_validator("email")(check_email)
 
 
 class EmailIn(BaseModel):
@@ -41,7 +60,7 @@ class VerifyCodeIn(BaseModel):
 
 class ResetPasswordIn(BaseModel):
     reset_token: str
-    new_password: str = Field(min_length=8)
+    new_password: str = Field(min_length=8, max_length=MAX_PASSWORD)
 
 
 class ProfilePatch(BaseModel):
@@ -53,6 +72,7 @@ class ProfilePatch(BaseModel):
     city_id: int | None = None
 
     _name = field_validator("full_name")(check_name)
+    _mobile = field_validator("mobile_no")(check_mobile)
 
 
 class CartItemIn(BaseModel):
@@ -90,11 +110,23 @@ class PlaceOrderIn(BaseModel):
     courier: str | None = None
 
 
+MAX_MESSAGE_WORDS = 200  # Contact Us (frontend: MAX_MESSAGE_WORDS in lib/constants.ts)
+
+
 class ContactIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    email: EmailStr
+    email: str = Field(max_length=MAX_EMAIL)
     subject: Literal["order", "refund", "product", "other"]
     message: str = Field(min_length=1, max_length=5000)
+
+    @field_validator("message")
+    @classmethod
+    def word_limit(cls, v: str) -> str:
+        if len(v.split()) > MAX_MESSAGE_WORDS:
+            raise ValueError(f"Keep your message to {MAX_MESSAGE_WORDS} words or less")
+        return v
+
+    _email = field_validator("email")(check_email)
 
 
 class GcashPaymentIn(BaseModel):
@@ -118,6 +150,7 @@ class RefundIn(BaseModel):
     reason: str = Field(min_length=1, max_length=100)
     details: str | None = Field(default=None, max_length=1000)
     photos: list[str] = Field(default_factory=list, max_length=3)
+    is_anonymous: bool = False
 
 
 class RefundStatusIn(BaseModel):
@@ -168,6 +201,63 @@ class ReviewReplyIn(BaseModel):
     reply: str = Field(min_length=1, max_length=1000)
 
 
+# ---------- suppliers and defects ----------
+
+class SupplierIn(BaseModel):
+    supplier_name: str = Field(min_length=1, max_length=120)
+    contact_person: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=40)
+    email: str | None = Field(default=None, max_length=100)
+    address: str | None = Field(default=None, max_length=300)
+    is_active: bool = True
+
+    @field_validator("contact_person", "phone", "address", "email", mode="before")
+    @classmethod
+    def blank_is_none(cls, v):
+        return v.strip() or None if isinstance(v, str) else v
+
+    _email = field_validator("email")(check_email)
+
+
+class CategorySupplierIn(BaseModel):
+    supplier_id: int | None
+
+
+DefectStatus = Literal["Reported", "Returned to supplier", "Replaced", "Credited"]
+
+
+class DefectIn(BaseModel):
+    prod_var_id: int
+    quantity: int = Field(gt=0, le=1000)
+    defect_type: str = Field(min_length=1, max_length=80)
+    source: Literal["receiving", "storage", "customer_return"]
+    order_id: int | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+    photos: list[str] = Field(default_factory=list, max_length=5)
+
+
+class DefectStatusIn(BaseModel):
+    status: DefectStatus
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+# ---------- chat ----------
+
+class ChatIn(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("body")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Type a message first")
+        return v
+
+
+class ChatResolveIn(BaseModel):
+    resolved: bool
+
+
 # ---------- admins (Super Admin only) ----------
 
 AdminRole = Literal["admin", "super_admin"]
@@ -175,11 +265,13 @@ AdminRole = Literal["admin", "super_admin"]
 
 class AdminIn(BaseModel):
     full_name: str = Field(min_length=1)
-    email: EmailStr
-    password: str = Field(min_length=8)
+    email: str = Field(max_length=MAX_EMAIL)
+    password: str = Field(min_length=8, max_length=MAX_PASSWORD)
     role: AdminRole = "admin"
 
     _name = field_validator("full_name")(check_name)
+
+    _email = field_validator("email")(check_email)
 
 
 class AdminRoleIn(BaseModel):
@@ -187,17 +279,19 @@ class AdminRoleIn(BaseModel):
 
 
 class PasswordIn(BaseModel):
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=8, max_length=MAX_PASSWORD)
 
 
 # ---------- settings ----------
 
 class StoreSettingsIn(BaseModel):
     name: str = Field(min_length=1)
-    support_email: EmailStr
+    support_email: str = Field(max_length=100)
     phone: str = Field(min_length=1)
     address: str = Field(min_length=1)
     hours: str = Field(min_length=1)
+
+    _email = field_validator("support_email")(check_email)
 
 
 class PolicySettingsIn(BaseModel):

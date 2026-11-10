@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { emailError } from '@/lib/email';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -37,7 +38,8 @@ export default function ForgotPasswordPage() {
 
   const sendCode = (e?: FormEvent) => {
     e?.preventDefault();
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError('Please enter a valid email.');
+    const badEmail = emailError(email);
+    if (badEmail) return setError(badEmail);
     run(async () => {
       await authService.sendResetCode(email.trim());
       setStep('code');

@@ -39,7 +39,7 @@ export async function http<T>(path: string, opts: { method?: string; params?: Pa
   if (!res.ok) {
     // FastAPI puts error messages in "detail" (a list when validation fails)
     const data = await res.json().catch(() => null);
-    const detail = typeof data?.detail === 'string' ? data.detail : Array.isArray(data?.detail) ? data.detail[0]?.msg : res.statusText;
+    const detail = typeof data?.detail === 'string' ? data.detail : Array.isArray(data?.detail) ? String(data.detail[0]?.msg ?? '').replace(/^Value error, /, '') : res.statusText;
     throw new HttpError(res.status, detail || 'Request failed');
   }
   return res.status === 204 ? (undefined as T) : res.json();
