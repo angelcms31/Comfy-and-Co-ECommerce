@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, Download, Printer, Truck } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { ErrorState, LoadingState } from '@/components/ui/States';
+import { useToast } from '@/components/ui/Toast';
 import { useAsync } from '@/hooks/useAsync';
 import { orderService } from '@/services/orderService';
 import { COURIER, STORE_ADDRESS, STORE_PHONE } from '@/lib/constants';
 import { formatDateTime } from '@/lib/dates';
 import { formatPeso } from '@/lib/pricing';
+import { downloadReceiptPdf } from '@/lib/receiptPdf';
 import { parseShipping, paymentLabel } from '@/lib/tracking';
 import NotFound from '../NotFound';
 
@@ -16,11 +18,62 @@ import NotFound from '../NotFound';
 export const riderLink = (orderNum: string, token: string) => `${window.location.origin}/deliver/${encodeURIComponent(orderNum)}/${encodeURIComponent(token)}`;
 
 // Printed and taped to the package when the order ships. The Lalamove rider scans the QR code at the door to
-// confirm the delivery (with photos) or log a failed attempt. Opened from Orders > order details > Print receipt.
+// confirm the delivery (with photos) or log a failed attempt. Opened from Orders (picking Shipped, or the details'
+// "Print QR receipt"). A Pending delivery order gets its QR token here, and is marked Shipped here after printing.
 export default function ReceiptPage() {
   const orderId = Number(useParams().orderId);
-  const { data: order, loading, error, reload } = useAsync(() => orderService.getOne(orderId), [orderId]);
+  const { data: order, loading, error, reload, setData } = useAsync(() => orderService.getOne(orderId), [orderId]);
   const [qr, setQr] = useState<string | null>(null);
+  const [printed, setPrinted] = useState(false); // downloaded or printed: unlocks "Mark as shipped"
+  const [downloading, setDownloading] = useState(false);
+  const [shipping, setShipping] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+  const toast = useToast();
+
+  // step 1: the QR token, made once for a Pending delivery order (refused e.g. while a GCash payment is unconfirmed)
+  const needsToken = !!order && order.order_stat === 'Pending' && !order.delivery_token && !parseShipping(order.shipping_add).pickup;
+  useEffect(() => {
+    if (!needsToken) return;
+    setTokenError(null);
+    orderService
+      .makeReceipt(orderId)
+      .then(setData)
+      .catch((err: unknown) => setTokenError(err instanceof Error ? err.message : 'Could not make the receipt'));
+  }, [needsToken, orderId, setData]);
+
+  // one click: the PDF lands in the downloads folder, no dialog
+  const download = async () => {
+    if (!order || !qr) return;
+    setDownloading(true);
+    try {
+      const filename = await downloadReceiptPdf(order, qr);
+      setPrinted(true);
+      toast.success(`Saved ${filename}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not make the PDF');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const print = () => {
+    window.print();
+    setPrinted(true);
+  };
+
+  // step 2: after the receipt is printed and on the package
+  const markShipped = async () => {
+    if (!order) return;
+    setShipping(true);
+    try {
+      setData(await orderService.updateStatus(order.order_id, 'Shipped'));
+      toast.success(`#${order.order_num} is now Shipped`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update the order');
+    } finally {
+      setShipping(false);
+    }
+  };
 
   const token = order?.delivery_token;
   useEffect(() => {
@@ -35,7 +88,7 @@ export default function ReceiptPage() {
 
   const { pickup, address } = parseShipping(order.shipping_add);
   const cod = order.payment_method === 'COD' || order._temp_payment_status !== 'Paid';
-  const ready = order.order_stat === 'Shipped' && !pickup && !!token;
+  const ready = (order.order_stat === 'Pending' || order.order_stat === 'Shipped') && !pickup && !!token;
 
   return (
     <div className="min-h-screen bg-cream print:bg-white">
@@ -44,17 +97,33 @@ export default function ReceiptPage() {
           <Link to="/admin/orders" className="inline-flex items-center gap-1 text-sm text-muted hover:text-forest">
             <ArrowLeft className="size-4" /> Back to orders
           </Link>
-          <Button onClick={() => window.print()} disabled={!ready || !qr}>
-            <Printer className="size-4" /> Print / Save as PDF
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant={ready && order.order_stat === 'Pending' && !printed ? undefined : 'outline'} onClick={download} loading={downloading} disabled={!ready || !qr}>
+              <Download className="size-4" /> Download PDF
+            </Button>
+            <Button variant="outline" onClick={print} disabled={!ready || !qr} title="Print on paper now">
+              <Printer className="size-4" /> Print
+            </Button>
+            {ready && order.order_stat === 'Pending' && (
+              <Button onClick={markShipped} loading={shipping} disabled={!printed} title={printed ? undefined : 'Download or print the receipt first'}>
+                <Truck className="size-4" /> Mark as shipped
+              </Button>
+            )}
+          </div>
         </div>
+        {ready && order.order_stat === 'Pending' && (
+          <p className="mt-4 rounded-xl bg-mint-light p-3 text-sm text-forest">
+            {printed ? 'Tape the receipt to the package, then mark the order as shipped.' : 'Download (or print) this receipt first. The "Mark as shipped" button unlocks after that.'}
+          </p>
+        )}
+        {ready && order.order_stat === 'Shipped' && <p className="mt-4 rounded-xl bg-cream p-3 text-sm text-ink">This order is already out for delivery. You can download or print the receipt again.</p>}
         {!ready && (
           <p className="mt-4 rounded-xl bg-pending p-3 text-sm text-pending-text">
             {pickup
               ? 'This is a store pickup order, there is nothing to deliver.'
-              : order.order_stat !== 'Shipped'
-                ? `The receipt is made when the order is marked Shipped (this order is ${order.order_stat}).`
-                : 'This order has no delivery code yet. Set it to Shipped again to make one.'}
+              : needsToken
+                ? (tokenError ?? 'Making the QR code...')
+                : `A ${order.order_stat.toLowerCase()} order has no delivery receipt.`}
           </p>
         )}
       </div>
