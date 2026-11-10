@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 import { BOTTOM_NAV_SPACE } from './BottomNav';
 import Header from './Header';
 import Footer from './Footer';
+import ChatWidget from '@/components/chat/ChatWidget';
 
 export default function CustomerLayout() {
   const { pathname } = useLocation();
@@ -20,6 +21,7 @@ export default function CustomerLayout() {
         <Outlet />
       </main>
       <Footer />
+      <ChatWidget />
     </div>
   );
 }
