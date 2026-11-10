@@ -24,6 +24,7 @@ ACTION_FILTERS = {
     "reviews": ["review"],
     "admins": ["admin account", "role of", "password of"],
     "settings": ["settings", "policies", "logged out"],
+    "inventory": ["supplier", "item issue", "defect"],
 }
 
 
@@ -78,7 +79,7 @@ def force_logout(db: Db, request: Request, me=Depends(require_super_admin)):
 def audit_logs(
     db: Db,
     admin: str | None = None,
-    action: Literal["products", "orders", "reviews", "admins", "settings"] | None = None,
+    action: Literal["products", "orders", "reviews", "admins", "settings", "inventory"] | None = None,
     page: int = 1,
     page_size: int = 10,
 ):

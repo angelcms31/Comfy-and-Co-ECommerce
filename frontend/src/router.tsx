@@ -15,6 +15,8 @@ import InventoryPage from '@/pages/admin/InventoryPage';
 import AdminOrdersPage from '@/pages/admin/OrdersPage';
 import AdminReviewsPage from '@/pages/admin/ReviewsPage';
 import AdminMessagesPage from '@/pages/admin/MessagesPage';
+import AdminChatsPage from '@/pages/admin/ChatsPage';
+import DefectsPage from '@/pages/admin/DefectsPage';
 import SettingsPage from '@/pages/admin/SettingsPage';
 import HomePage from '@/pages/customer/HomePage';
 import ProductListPage from '@/pages/customer/ProductListPage';
@@ -89,6 +91,8 @@ export const router = createBrowserRouter([
           { path: 'inventory', element: <InventoryPage /> },
           { path: 'orders', element: <AdminOrdersPage /> },
           { path: 'reviews', element: <AdminReviewsPage /> },
+          { path: 'chats', element: <AdminChatsPage /> },
+          { path: 'suppliers', element: <DefectsPage /> },
           { path: 'messages', element: <AdminMessagesPage /> },
           { path: 'settings', element: <RequireAdmin superOnly><SettingsPage /></RequireAdmin> },
         ],

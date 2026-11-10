@@ -70,7 +70,7 @@ export interface AllSettings {
   security: SecuritySettings;
 }
 
-export type AuditAction = 'products' | 'orders' | 'reviews' | 'admins' | 'settings';
+export type AuditAction = 'products' | 'orders' | 'reviews' | 'admins' | 'settings' | 'inventory';
 
 export interface AuditLogRow {
   log_id: number;

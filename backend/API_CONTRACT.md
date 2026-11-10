@@ -15,7 +15,7 @@ Response types are in `frontend/src/types/models.ts` and `frontend/src/features/
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | POST | `/auth/login` | `{ email, password }` | `Session` |
-| POST | `/auth/register` | `{ full_name, email, password, mobile_no?, birthdate? }` | `Session`; also creates the `"user"` row with role customer |
+| POST | `/auth/register` | `{ full_name, email, password, mobile_no, birthdate? }` (`mobile_no` is required, 11 digits starting with 09) | `Session`; also creates the `"user"` row with role customer |
 | POST | `/auth/logout` | – | 204 |
 | GET | `/auth/me` | – | `UserProfile` (401 if the token is invalid) |
 | POST | `/auth/forgot-password` | `{ email }` | 204, Supabase emails a 6 digit code |
@@ -151,9 +151,21 @@ When placing an order the backend should:
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
 | GET | `/reviews/mine` | – | `ReviewWithMeta[]` the logged-in customer wrote |
-| POST | `/reviews` | `{ prod_var_id, rating, content, photos: string[] }` | `ReviewWithMeta`; only after an order with that item is `Delivered` (403 otherwise). Writing again for the same item updates it |
+| POST | `/reviews` | `{ prod_var_id, rating, content, photos: string[], is_anonymous? }` | `ReviewWithMeta`; anonymous reviews show as "Anonymous" (no `user_id`) on the product page, admins still see the name; only after an order with that item is `Delivered` (403 otherwise). Writing again for the same item updates it |
 | POST | `/reviews/uploads` | multipart `file` | `{ url }` for `photos` (max 3 per review) |
 | GET | `/store-info` | – | public store name, support email, phone, address, hours (Settings > Store Info) |
+
+## Chat
+
+The FAQ bot (`backend/app/chatbot.py`) answers from fixed text and the Settings page. Logged-in customers' chats are saved; admins answer from `/admin/chats`.
+
+| Method | Path | Body / query | Returns |
+|---|---|---|---|
+| POST | `/chat/faq` | `{ body }` | `{ body, handoff, suggestions }`, no login needed and nothing saved. `handoff` = they asked for staff (the page asks guests to log in) |
+| GET | `/chat` | – | `{ needs_staff, messages, suggestions }` for the logged-in customer (403 for admins); marks staff replies read |
+| GET | `/chat/unread` | – | `{ unread }` staff replies not seen yet |
+| POST | `/chat/messages` | `{ body }` (max 1000) | same as `GET /chat`; the bot replies unless staff is on the chat |
+| POST | `/chat/staff` | – | same as `GET /chat`; asks staff to join (`needs_staff` true) |
 
 ## Admin (role `admin` or `super_admin`, 403 otherwise)
 
@@ -161,7 +173,7 @@ Every change below is written to `audit_log` (who, what, IP, device).
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
-| GET | `/admin/dashboard` | `range` (`7d` / `30d`) | `DashboardSummary` |
+| GET | `/admin/dashboard` | `range` (`7d` / `30d` / `12m` / `24m`) | `DashboardSummary`; `chart` ends with forecast points: 1 day / 1 week, or 6 / 12 months for the monthly ranges |
 | POST | `/admin/products` | `ProductInput` | `ProductWithVariants` |
 | PUT | `/admin/products/{product_id}` | `ProductInput` | `ProductWithVariants` |
 | PATCH | `/admin/products/{product_id}/archive` | `{ archived }` | `ProductWithVariants`; archived = `is_avail` false, hidden from the store |
@@ -173,12 +185,25 @@ Every change below is written to `audit_log` (who, what, IP, device).
 | PATCH | `/admin/reviews/{review_id}` | `{ is_hidden?, is_featured? }` | `ReviewWithMeta` |
 | POST | `/admin/reviews/{review_id}/reply` | `{ reply }` | `ReviewWithMeta` |
 | GET | `/admin/settings` | – | `{ store, policies, regional, security }` |
+| GET | `/admin/chats` | – | `ChatThread[]`, waiting for staff first, with `unread` and `last_message` |
+| GET | `/admin/chats/unread` | – | `{ unread }` chats waiting for staff with unopened customer messages |
+| GET | `/admin/chats/{thread_id}` | – | `{ thread, messages, orders }` (latest 3 orders); marks it read |
+| POST | `/admin/chats/{thread_id}/messages` | `{ body }` | same as GET; the bot stays quiet until resolved |
+| PATCH | `/admin/chats/{thread_id}` | `{ resolved }` | same as GET; resolving hands the chat back to the bot |
+| GET | `/admin/suppliers` | – | `{ suppliers, categories }`: suppliers with `categories`, `units_sold`, `defective_units`, `report_count`, `open_count`; each category with its `supplier_id` |
+| POST | `/admin/suppliers` | `{ supplier_name, contact_person?, phone?, email?, address?, is_active }` | the supplier (400 if the name is taken) |
+| PUT | `/admin/suppliers/{supplier_id}` | same as POST | the supplier |
+| PUT | `/admin/categories/{item_categ_id}/supplier` | `{ supplier_id }` (null = none) | same as `GET /admin/suppliers` |
+| GET | `/admin/defects` | – | defect reports, open ones first; each saves the supplier at the time it was reported |
+| GET | `/admin/defects/order/{order_id}` | – | the order's items, refund reason and photos, to start a report from a refund |
+| POST | `/admin/defects` | `{ prod_var_id, quantity, defect_type, source, order_id?, notes?, photos }` | the report. `source`: `receiving` / `storage` (takes the units out of stock) / `customer_return` (needs `order_id`) |
+| PATCH | `/admin/defects/{defect_id}` | `{ status, notes? }` | the report. Reported → Returned to supplier → Replaced (units go back into stock) / Credited; Reported → Credited |
 
 ## Super Admin only (403 for regular admins)
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
-| GET | `/admin/admins` | – | admins and super admins with `last_active` and `deactivated_at` |
+| GET | `/admin/admins` | – | admins and the Super Admin with `last_active` and `deactivated_at`. There is only one Super Admin: adding or promoting to `super_admin` is refused (400) |
 | POST | `/admin/admins` | `{ full_name, email, password, role }` | the new account |
 | PATCH | `/admin/admins/{user_id}/role` | `{ role }` | the account (not your own) |
 | POST | `/admin/admins/{user_id}/password` | `{ password }` | 204 |

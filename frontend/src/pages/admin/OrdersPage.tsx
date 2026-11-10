@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Download, PackageX } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Modal from '@/components/ui/Modal';
@@ -120,6 +121,13 @@ function OrderDetails({
               <dd>
                 {order.refund.reason}
                 {order.refund.details && <span className="mt-1 block whitespace-pre-line text-muted">{order.refund.details}</span>}
+                {/* a damaged item from the supplier: start an item issue report with this order's item and photos */}
+                <Link
+                  to={`/admin/suppliers?order=${order.order_id}`}
+                  className="mt-2 flex w-fit items-center gap-1.5 rounded-full border border-coral-dark/50 px-3 py-1 text-xs font-medium text-coral-dark hover:bg-coral/10"
+                >
+                  <PackageX className="size-3.5" /> Report issue to supplier
+                </Link>
               </dd>
               {parseImages(order.refund.photos).length > 0 && (
                 <>

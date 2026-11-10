@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Mail, Menu, Package, Settings, ShoppingCart, Star, Store, X } from 'lucide-react';
+import { LayoutDashboard, Mail, Menu, MessageCircle, Package, Settings, ShoppingCart, Star, Store, Truck, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
+import { usePolling } from '@/hooks/usePolling';
+import { chatService } from '@/services/chatService';
 import { adminService } from '@/services/adminService';
 import { cn } from '@/lib/cn';
 import { isSuperAdmin, ROLE_LABEL } from '@/lib/roles';
@@ -13,8 +15,10 @@ const links = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/inventory', label: 'Inventory', icon: Package },
   { to: '/admin/orders', label: 'Orders', icon: ShoppingCart },
+  { to: '/admin/chats', label: 'Chats', icon: MessageCircle },
   { to: '/admin/reviews', label: 'Reviews', icon: Star },
   { to: '/admin/messages', label: 'Messages', icon: Mail },
+  { to: '/admin/suppliers', label: 'Suppliers', icon: Truck },
 ];
 const settingsLink = { to: '/admin/settings', label: 'Settings', icon: Settings };
 
@@ -36,7 +40,21 @@ function useInactivityLogout(minutes: number | undefined, onTimeout: () => void)
   }, [minutes, onTimeout]);
 }
 
-function Sidebar({ onNavigate, onLogout }: { onNavigate?: () => void; onLogout: () => void }) {
+// chats waiting for staff with messages nobody opened yet, checked every 30 seconds
+function useUnreadChats() {
+  const [count, setCount] = useState(0);
+  const check = useCallback(() => {
+    chatService.adminUnread().then((r) => setCount(r.unread)).catch(() => {});
+  }, []);
+  const { pathname } = useLocation();
+  useEffect(check, [check, pathname]);
+  usePolling(check, 30000);
+  return count;
+}
+
+const CHATS = '/admin/chats';
+
+function Sidebar({ onNavigate, onLogout, unreadChats }: { onNavigate?: () => void; onLogout: () => void; unreadChats: number }) {
   const { user } = useAuth();
   const nav = isSuperAdmin(user) ? [...links, settingsLink] : links;
 
@@ -59,7 +77,10 @@ function Sidebar({ onNavigate, onLogout }: { onNavigate?: () => void; onLogout: 
             }
           >
             <Icon className="size-5" />
-            {label}
+            <span className="flex-1">{label}</span>
+            {to === CHATS && unreadChats > 0 && (
+              <span className="grid min-w-5 place-items-center rounded-full bg-coral-dark px-1 text-[11px] font-semibold leading-5 text-white">{unreadChats}</span>
+            )}
           </NavLink>
         ))}
       </nav>
@@ -106,12 +127,14 @@ export default function AdminLayout() {
   const onTimeout = useCallback(() => onLogout('You were logged out after being inactive. Please log in again.'), [onLogout]);
   useInactivityLogout(settings.data?.security.inactivity_minutes, onTimeout);
 
-  const tabs = isSuperAdmin(user) ? [...links.slice(0, 3), settingsLink] : links;
+  const unreadChats = useUnreadChats();
+  // bottom tabs on phones (the rest are under Menu): Dashboard, Inventory, Orders, Chats, then Settings or Reviews
+  const tabs = [...links.slice(0, 4), isSuperAdmin(user) ? settingsLink : links[4]];
 
   return (
     <div className={cn('min-h-screen bg-cream lg:grid lg:grid-cols-[240px_1fr]', BOTTOM_NAV_SPACE)}>
       <aside className="sticky top-0 hidden h-screen lg:block">
-        <Sidebar onLogout={() => onLogout()} />
+        <Sidebar onLogout={() => onLogout()} unreadChats={unreadChats} />
       </aside>
 
       {/* phone + tablet: title on top, tabs at the bottom, Menu opens the sidebar */}
@@ -126,6 +149,7 @@ export default function AdminLayout() {
             to={to}
             label={label}
             icon={<Icon className="size-6" />}
+            badge={to === CHATS ? unreadChats : undefined}
             active={!open && ('end' in rest ? pathname === to : pathname.startsWith(to))}
           />
         ))}
@@ -135,7 +159,7 @@ export default function AdminLayout() {
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-ink/40" onClick={() => setOpen(false)} />
           <div className="relative h-full w-64">
-            <Sidebar onNavigate={() => setOpen(false)} onLogout={() => onLogout()} />
+            <Sidebar onNavigate={() => setOpen(false)} onLogout={() => onLogout()} unreadChats={unreadChats} />
             <button onClick={() => setOpen(false)} className="absolute right-3 top-6 text-white" aria-label="Close menu">
               <X className="size-5" />
             </button>
