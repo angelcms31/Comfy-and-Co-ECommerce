@@ -2,14 +2,15 @@ import { Check, ClipboardList, House, Package, Store, Truck, XCircle } from 'luc
 import type { OrderStat } from '@/types/db';
 import { cn } from '@/lib/cn';
 
-const STEP_OF: Record<OrderStat, number> = { Pending: 1, Shipped: 2, Delivered: 3, Cancelled: 0 };
+const STEP_OF: Record<OrderStat, number> = { Pending: 1, Shipped: 2, Delivered: 3, Cancelled: 0, Returned: 0 };
 
 // Shopee-style row of steps: placed -> preparing -> on the way -> delivered
 export default function TrackingSteps({ status, pickup, courier }: { status: OrderStat; pickup: boolean; courier: string | null }) {
-  if (status === 'Cancelled') {
+  if (status === 'Cancelled' || status === 'Returned') {
     return (
       <p className="flex items-center gap-2 rounded-xl bg-cancelled px-4 py-3 text-sm font-medium text-cancelled-text">
-        <XCircle className="size-5 shrink-0" /> This order was cancelled.
+        <XCircle className="size-5 shrink-0" />
+        {status === 'Cancelled' ? 'This order was cancelled.' : 'This order was returned to the store: the rider could not deliver it.'}
       </p>
     );
   }

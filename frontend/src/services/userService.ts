@@ -2,7 +2,7 @@ import { http } from '@/lib/http';
 import type { User } from '@/types/db';
 import type { UserProfile } from '@/types/models';
 
-export type ProfilePatch = Partial<Pick<User, 'full_name' | 'birthdate' | 'mobile_no' | 'st_add' | 'postal' | 'city_id'>>;
+export type ProfilePatch = Partial<Pick<User, 'full_name' | 'birthdate' | 'mobile_no' | 'st_add' | 'postal' | 'city_id' | 'lat' | 'lng' | 'delivery_note'>>;
 
 export const userService = {
   getProfile: () => http<UserProfile>('/users/me'),

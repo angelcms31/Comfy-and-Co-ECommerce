@@ -103,7 +103,9 @@ frontend/                  React app
 backend/                   FastAPI
   app/routers/             API endpoints
   supabase/schema.sql      tables from the ERD
-  supabase/migrations/     changes on top of the ERD (002 = admin panel), run after schema.sql
+  supabase/migrations/     changes on top of the ERD (002 = admin panel, 011 = Lalamove delivery), run after schema.sql
+  supabase/load_dimensions.py  fills each variant's packed size and weight from products.json (run once after migration 011)
+  app/delivery.py          Lalamove: picks the vehicle for an order, road distance from the store, the fee
   supabase/seed.sql        sample data + demo accounts
   API_CONTRACT.md          list of endpoints
 SCHEMA_GAPS.md             things the ERD is missing

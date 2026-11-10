@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { MapPin } from 'lucide-react';
-import { COURIERS } from '@/lib/constants';
+import { COURIER } from '@/lib/constants';
 import { useStoreInfo } from '@/hooks/useStoreInfo';
 import { useAuth } from '@/context/AuthContext';
 import { LogoMark } from './Logo';
@@ -55,11 +55,7 @@ export default function Footer() {
           </div>
           <h3 className="mb-3 mt-6 font-sans text-sm font-semibold">Courier Partners</h3>
           <div className={badges}>
-            {COURIERS.map((c) => (
-              <span key={c} className={badge}>
-                {c}
-              </span>
-            ))}
+            <span className={badge}>{COURIER}</span>
           </div>
         </div>
       </div>

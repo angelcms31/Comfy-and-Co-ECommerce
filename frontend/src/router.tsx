@@ -31,6 +31,8 @@ import ShippingPage from '@/pages/customer/account/ShippingPage';
 import AboutPage from '@/pages/customer/AboutPage';
 import ContactPage from '@/pages/customer/ContactPage';
 import PolicyPage from '@/pages/customer/PolicyPage';
+import ReceiptPage from '@/pages/admin/ReceiptPage';
+import DeliverPage from '@/pages/DeliverPage';
 import NotFound from '@/pages/NotFound';
 
 // providers sit inside the router because the wishlist uses navigate()
@@ -77,7 +79,11 @@ export const router = createBrowserRouter([
           { path: '*', element: <NotFound /> },
         ],
       },
+      // the Lalamove rider's page, from the QR code on the receipt (no login, the token in the link is the key)
+      { path: '/deliver/:orderNum/:token', element: <DeliverPage /> },
       { path: '/admin/login', element: <AdminLoginPage /> },
+      // printable, so it sits outside the admin layout
+      { path: '/admin/orders/:orderId/receipt', element: <RequireAdmin><ReceiptPage /></RequireAdmin> },
       {
         path: '/admin',
         element: (

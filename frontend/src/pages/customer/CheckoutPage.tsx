@@ -1,8 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Banknote, Pencil, ShoppingBag, Smartphone, Store, Truck } from 'lucide-react';
+import { ArrowLeft, Banknote, MapPin, Pencil, ShoppingBag, Smartphone, Store, Truck } from 'lucide-react';
 import Button, { ButtonLink } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Input';
 import PriceTag from '@/components/ui/PriceTag';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
@@ -11,8 +10,8 @@ import { useCart } from '@/context/CartContext';
 import { useAsync } from '@/hooks/useAsync';
 import { orderService } from '@/services/orderService';
 import { productService } from '@/services/productService';
-import type { CartLine } from '@/types/models';
-import { COURIERS, DELIVERY_DAYS, DELIVERY_FEE, STORE_ADDRESS } from '@/lib/constants';
+import type { CartLine, DeliveryQuote, UserProfile, VariantWithProduct } from '@/types/models';
+import { COURIER, DELIVERY_DAYS, STORE_ADDRESS } from '@/lib/constants';
 import { itemCount, lineTotal, linesTotal, readCheckoutIds } from '@/lib/checkout';
 import { addDays, toDay } from '@/lib/dates';
 import { firstImage } from '@/lib/images';
@@ -59,66 +58,57 @@ function Choice({ checked, onSelect, icon, label, note, name }: { checked: boole
   );
 }
 
-export default function CheckoutPage() {
-  const { user } = useAuth();
+// the Lalamove quote for these items going to the saved address: asked again whenever the items or the address change
+function useDeliveryQuote(enabled: boolean, lines: CartLine[], user: UserProfile) {
+  const [state, setState] = useState<{ quote: DeliveryQuote | null; loading: boolean; error: string | null }>({ quote: null, loading: false, error: null });
+  const key = lines.map((l) => `${l.prod_var_id}:${l.quantity}`).join(',');
+  const { st_add, postal, city_id, lat, lng } = user;
+
+  useEffect(() => {
+    if (!enabled || !st_add || !city_id) {
+      setState({ quote: null, loading: false, error: null });
+      return;
+    }
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true, error: null }));
+    orderService
+      .quoteDelivery({ lines: lines.map((l) => ({ prod_var_id: l.prod_var_id, quantity: l.quantity })), st_add, postal, city_id, lat, lng })
+      .then((quote) => !cancelled && setState({ quote, loading: false, error: null }))
+      .catch((err: unknown) => !cancelled && setState({ quote: null, loading: false, error: err instanceof Error ? err.message : 'Could not get a delivery quote' }));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, key, st_add, postal, city_id, lat, lng]);
+
+  return state;
+}
+
+function CheckoutForm({ lines, user, buyVariant, buySearch }: { lines: CartLine[]; user: UserProfile; buyVariant?: VariantWithProduct; buySearch: string }) {
   const cart = useCart();
   const toast = useToast();
   const navigate = useNavigate();
 
   const [fulfillment, setFulfillment] = useState<Fulfillment>('delivery');
-  const [courier, setCourier] = useState('');
   const [payment, setPayment] = useState<PaymentMethod>('COD');
-  const [courierError, setCourierError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
 
-  // Buy Now on a product page: /checkout?buy=<variant>&qty=<number>. It's in the URL so it survives logging in and editing the address.
-  const [params] = useSearchParams();
-  const buyId = Number(params.get('buy')) || null;
-  const buyNow = useAsync(() => (buyId ? productService.getVariants([buyId]) : Promise.resolve([])), [buyId]);
-  const buySearch = buyId ? `?${params.toString()}` : '';
-
-  if (!user) return null; // RequireLogin handles this
-  if (cart.loading || (buyId && buyNow.loading)) return <div className="container-page max-w-4xl py-8"><LoadingState label="Loading your order..." layout="list" /></div>;
-  if (cart.error) return <ErrorState message={cart.error} onRetry={cart.reload} />;
-  if (buyNow.error) return <ErrorState message={buyNow.error} onRetry={buyNow.reload} />;
-
-  const buyVariant = buyNow.data?.[0];
-  const buyLines: CartLine[] = buyVariant
-    ? [{ cart_item_id: `buy-${buyVariant.prod_var_id}`, prod_var_id: buyVariant.prod_var_id, quantity: Math.min(Math.max(1, Math.floor(Number(params.get('qty'))) || 1), buyVariant.stocks), variant: buyVariant }]
-    : [];
-
-  // the one Buy Now item, or the items ticked in the cart (all of them if the cart was skipped)
-  const ids = readCheckoutIds();
-  const lines = buyId ? buyLines.filter((l) => isBuyable(l.variant)) : cart.lines.filter((l) => isBuyable(l.variant) && (!ids || ids.includes(l.prod_var_id)));
-
-  if (lines.length === 0) {
-    return (
-      <div className="container-page py-12">
-        <EmptyState
-          icon={<ShoppingBag className="size-7" />}
-          title="Nothing to check out"
-          message={buyId ? 'This item is no longer available.' : 'Pick the items you want from your cart first.'}
-          action={buyId ? <ButtonLink to="/products">Browse products</ButtonLink> : <ButtonLink to="/cart">Go to cart</ButtonLink>}
-        />
-      </div>
-    );
-  }
-
   const hasAddress = !!(user.mobile_no && user.st_add && user.postal && user.city_id);
-  // the delivery fee only shows once there's a courier
-  const needsCourier = fulfillment === 'delivery' && !courier;
-  const fee = fulfillment === 'delivery' && courier ? DELIVERY_FEE : 0;
+  const delivery = fulfillment === 'delivery';
+  const { quote, loading: quoting, error: quoteError } = useDeliveryQuote(delivery && hasAddress, lines, user);
+  const fee = delivery ? (quote?.delivery_fee ?? 0) : 0;
   const subtotal = linesTotal(lines);
   const count = itemCount(lines);
   const address = [user.st_add, user.city?.city, user.postal, user.city?.country.country].filter(Boolean).join(', ');
+  const hasPin = user.lat != null && user.lng != null;
 
   const placeOrder = async () => {
-    if (fulfillment === 'delivery' && !courier) {
-      setCourierError('Please pick a courier');
-      return;
-    }
     if (!hasAddress) {
       toast.error('Please add your shipping details first.');
+      return;
+    }
+    if (delivery && !quote) {
+      toast.error(quoteError ?? 'Please wait for the delivery fee.');
       return;
     }
     setPlacing(true);
@@ -128,7 +118,7 @@ export default function CheckoutPage() {
         payment_method: payment,
         customer: { full_name: user.full_name, mobile_no: user.mobile_no, st_add: user.st_add, postal: user.postal, city_id: user.city_id },
         fulfillment,
-        courier: fulfillment === 'delivery' ? courier : undefined,
+        drop_off: delivery ? { lat: user.lat, lng: user.lng, delivery_note: user.delivery_note } : undefined,
       });
       cart.reload(); // the backend took the ordered items out of the cart
       if (payment === 'GCash') navigate(`/checkout/gcash/${order.order_id}`, { replace: true });
@@ -138,6 +128,8 @@ export default function CheckoutPage() {
       setPlacing(false);
     }
   };
+
+  const feeCell = !delivery ? 'Free' : !hasAddress ? 'Add your address' : quoting ? 'Calculating…' : quoteError ? 'Unavailable' : formatPeso(fee);
 
   return (
     <div className="container-page max-w-3xl py-6 sm:py-10">
@@ -173,27 +165,30 @@ export default function CheckoutPage() {
       <div className="space-y-5">
         <Card title="Fulfilment Method">
           <div className="space-y-2">
-            <Choice name="fulfillment" checked={fulfillment === 'delivery'} onSelect={() => setFulfillment('delivery')} icon={<Truck className="size-4" />} label="Standard Delivery" note={`Estimated ${deliveryWindow()}`} />
-            <Choice name="fulfillment" checked={fulfillment === 'pickup'} onSelect={() => setFulfillment('pickup')} icon={<Store className="size-4" />} label="Store Pickup" note="Available today" />
+            <Choice name="fulfillment" checked={delivery} onSelect={() => setFulfillment('delivery')} icon={<Truck className="size-4" />} label={`${COURIER} Delivery`} note={`Estimated ${deliveryWindow()}`} />
+            <Choice name="fulfillment" checked={!delivery} onSelect={() => setFulfillment('pickup')} icon={<Store className="size-4" />} label="Store Pickup" note="Available today" />
           </div>
-          {fulfillment === 'delivery' ? (
-            <div className="mt-4">
-              <Select
-                label="Select Courier Partner"
-                value={courier}
-                onChange={(e) => {
-                  setCourier(e.target.value);
-                  setCourierError(null);
-                }}
-                error={courierError}
-              >
-                <option value="">Select Courier</option>
-                {COURIERS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </Select>
+          {delivery ? (
+            <div className="mt-4 rounded-xl bg-cream p-3 text-sm">
+              {!hasAddress ? (
+                <p className="text-muted">Add your shipping address to see the delivery fee.</p>
+              ) : quoting ? (
+                <p className="text-muted">Finding the right vehicle and distance for your order…</p>
+              ) : quoteError ? (
+                <p className="text-coral-dark">{quoteError}</p>
+              ) : quote ? (
+                <>
+                  <p className="font-medium text-ink">
+                    {COURIER} {quote.vehicle}
+                    {quote.trips > 1 && ` × ${quote.trips} trips`} · {quote.distance_km} km from our store
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    The vehicle is picked from the size and weight of your items. The fee is the {COURIER} rate for that vehicle and distance
+                    {quote.located_by === 'address' && ', measured to your typed address'}
+                    {quote.located_by === 'pin' && ', measured to your map pin'}.
+                  </p>
+                </>
+              ) : null}
             </div>
           ) : (
             <p className="mt-3 text-sm text-muted">
@@ -203,7 +198,7 @@ export default function CheckoutPage() {
         </Card>
 
         <Card
-          title={fulfillment === 'delivery' ? 'Shipping Address' : 'Contact Details'}
+          title={delivery ? 'Shipping Address' : 'Contact Details'}
           action={
             <Link to={`/checkout/shipping${buySearch}`} className="inline-flex items-center gap-1 text-sm text-ink hover:text-forest">
               <Pencil className="size-3.5" /> Edit details
@@ -218,6 +213,21 @@ export default function CheckoutPage() {
               </dd>
               <dt className="text-muted">Address</dt>
               <dd className="text-ink">{address}</dd>
+              {delivery && (
+                <>
+                  <dt className="text-muted">Map pin</dt>
+                  <dd className={hasPin ? 'text-ink' : 'text-muted'}>
+                    <MapPin className="mr-1 inline size-3.5 text-forest" />
+                    {hasPin ? 'Pinned, the rider will be sent to your pin' : 'None yet. Pin your house so the rider finds you faster.'}
+                  </dd>
+                  {user.delivery_note && (
+                    <>
+                      <dt className="text-muted">Rider notes</dt>
+                      <dd className="whitespace-pre-line text-ink">{user.delivery_note}</dd>
+                    </>
+                  )}
+                </>
+              )}
             </dl>
           ) : (
             <div className="rounded-xl bg-butter-light p-4 text-sm">
@@ -236,7 +246,7 @@ export default function CheckoutPage() {
               checked={payment === 'COD'}
               onSelect={() => setPayment('COD')}
               icon={<Banknote className="size-4" />}
-              label={fulfillment === 'delivery' ? 'Cash on Delivery' : 'Cash on Pickup'}
+              label={delivery ? 'Cash on Delivery' : 'Cash on Pickup'}
             />
             <Choice name="payment" checked={payment === 'GCash'} onSelect={() => setPayment('GCash')} icon={<Smartphone className="size-4" />} label="GCash" />
           </div>
@@ -250,8 +260,8 @@ export default function CheckoutPage() {
               <dd>{formatPeso(subtotal)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt>Delivery Fee</dt>
-              <dd className={needsCourier ? 'text-muted' : undefined}>{needsCourier ? 'Select a courier' : fee ? formatPeso(fee) : 'Free'}</dd>
+              <dt>Delivery Fee{delivery && quote ? ` (${COURIER})` : ''}</dt>
+              <dd className={delivery && !quote ? 'text-muted' : undefined}>{feeCell}</dd>
             </div>
             <div className="flex justify-between border-t border-line pt-3 text-lg font-semibold">
               <dt className="font-display text-forest">Total Amount</dt>
@@ -261,9 +271,49 @@ export default function CheckoutPage() {
         </Card>
       </div>
 
-      <Button size="lg" className="mt-6 w-full" onClick={placeOrder} loading={placing} disabled={!hasAddress}>
+      <Button size="lg" className="mt-6 w-full" onClick={placeOrder} loading={placing} disabled={!hasAddress || (delivery && !quote)}>
         <ShoppingBag className="size-4" /> Checkout
       </Button>
     </div>
   );
+}
+
+export default function CheckoutPage() {
+  const { user } = useAuth();
+  const cart = useCart();
+
+  // Buy Now on a product page: /checkout?buy=<variant>&qty=<number>. It's in the URL so it survives logging in and editing the address.
+  const [params] = useSearchParams();
+  const buyId = Number(params.get('buy')) || null;
+  const buyNow = useAsync(() => (buyId ? productService.getVariants([buyId]) : Promise.resolve([])), [buyId]);
+  const buySearch = buyId ? `?${params.toString()}` : '';
+
+  if (!user) return null; // RequireLogin handles this
+  if (cart.loading || (buyId && buyNow.loading)) return <div className="container-page max-w-4xl py-8"><LoadingState label="Loading your order..." layout="list" /></div>;
+  if (cart.error) return <ErrorState message={cart.error} onRetry={cart.reload} />;
+  if (buyNow.error) return <ErrorState message={buyNow.error} onRetry={buyNow.reload} />;
+
+  const buyVariant = buyNow.data?.[0];
+  const buyLines: CartLine[] = buyVariant
+    ? [{ cart_item_id: `buy-${buyVariant.prod_var_id}`, prod_var_id: buyVariant.prod_var_id, quantity: Math.min(Math.max(1, Math.floor(Number(params.get('qty'))) || 1), buyVariant.stocks), variant: buyVariant }]
+    : [];
+
+  // the one Buy Now item, or the items ticked in the cart (all of them if the cart was skipped)
+  const ids = readCheckoutIds();
+  const lines = buyId ? buyLines.filter((l) => isBuyable(l.variant)) : cart.lines.filter((l) => isBuyable(l.variant) && (!ids || ids.includes(l.prod_var_id)));
+
+  if (lines.length === 0) {
+    return (
+      <div className="container-page py-12">
+        <EmptyState
+          icon={<ShoppingBag className="size-7" />}
+          title="Nothing to check out"
+          message={buyId ? 'This item is no longer available.' : 'Pick the items you want from your cart first.'}
+          action={buyId ? <ButtonLink to="/products">Browse products</ButtonLink> : <ButtonLink to="/cart">Go to cart</ButtonLink>}
+        />
+      </div>
+    );
+  }
+
+  return <CheckoutForm lines={lines} user={user} buyVariant={buyVariant} buySearch={buySearch} />;
 }

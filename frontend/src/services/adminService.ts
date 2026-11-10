@@ -3,6 +3,7 @@ import type {
   AdminAccount,
   AdminRoleName,
   AllSettings,
+  DeliverySettings,
   AuditAction,
   AuditLogRow,
   NewAdminInput,
@@ -28,6 +29,7 @@ export const adminService = {
   saveSecurity: (s: Pick<SecuritySettings, 'require_2fa' | 'inactivity_minutes'>) =>
     http<SecuritySettings>('/admin/settings/security', { method: 'PUT', body: s }),
   forceLogout: () => http<SecuritySettings>('/admin/settings/force-logout', { method: 'POST' }),
+  saveDelivery: (s: DeliverySettings) => http<DeliverySettings>('/admin/settings/delivery', { method: 'PUT', body: s }),
 
   getAuditLogs: (q: { admin?: string; action?: AuditAction; page?: number; pageSize?: number } = {}) =>
     http<{ total: number; rows: AuditLogRow[] }>('/admin/audit-logs', {

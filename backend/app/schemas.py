@@ -70,6 +70,10 @@ class ProfilePatch(BaseModel):
     st_add: str | None = None
     postal: str | None = None
     city_id: int | None = None
+    # the pin on the map (null = locate the typed address) and notes for the Lalamove rider
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    delivery_note: str | None = Field(default=None, max_length=300)
 
     _name = field_validator("full_name")(check_name)
     _mobile = field_validator("mobile_no")(check_mobile)
@@ -100,14 +104,63 @@ class Customer(BaseModel):
     city_id: int
 
 
+class DropOff(BaseModel):
+    # the customer's pin on the map, or nothing to locate the typed address
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    delivery_note: str | None = Field(default=None, max_length=300)
+
+
 class PlaceOrderIn(BaseModel):
     lines: list[CartItemIn] = Field(min_length=1)
     payment_method: Literal["GCash", "COD"]
     customer: Customer
     note: str | None = None
-    # no columns for these yet (SCHEMA_GAPS #18), they're written into shipping_add
+    # fulfillment is also written into shipping_add (SCHEMA_GAPS #18), the courier is always Lalamove for a delivery
     fulfillment: Literal["delivery", "pickup"] = "delivery"
-    courier: str | None = None
+    drop_off: DropOff = DropOff()
+
+
+class DeliveryFeedbackIn(BaseModel):
+    # the customer's answer to "did you receive your order?" after the rider marked it delivered
+    received: bool
+    details: str | None = Field(default=None, max_length=500)
+
+
+class DeliveryQuoteIn(BaseModel):
+    # the checkout asks for the vehicle, distance and fee before the order is placed
+    lines: list[CartItemIn] = Field(min_length=1)
+    st_add: str = Field(min_length=1)
+    postal: str | None = None
+    city_id: int
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+
+
+class DeliveryVehicleIn(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    length_cm: float = Field(gt=0)
+    width_cm: float = Field(gt=0)
+    height_cm: float = Field(gt=0)
+    max_kg: float = Field(gt=0)
+    base: float = Field(ge=0)
+    per_km: float = Field(ge=0)
+    tier_km: float | None = Field(default=None, gt=0)
+    per_km_after: float | None = Field(default=None, ge=0)
+    included_km: float = Field(default=0, ge=0)
+
+
+class DeliverySettingsIn(BaseModel):
+    store_lat: float = Field(ge=-90, le=90)
+    store_lng: float = Field(ge=-180, le=180)
+    max_km: float = Field(default=0, ge=0)
+    vehicles: list[DeliveryVehicleIn] = Field(min_length=1)
+
+    @field_validator("vehicles")
+    @classmethod
+    def smallest_first(cls, v: list[DeliveryVehicleIn]) -> list[DeliveryVehicleIn]:
+        # the picker takes the first vehicle that fits, so the list has to go from smallest to largest
+        return sorted(v, key=lambda x: (x.max_kg, x.length_cm * x.width_cm * x.height_cm))
 
 
 MAX_MESSAGE_WORDS = 200  # Contact Us (frontend: MAX_MESSAGE_WORDS in lib/constants.ts)
@@ -142,7 +195,7 @@ class CancelOrderIn(BaseModel):
 
 
 class OrderStatusIn(BaseModel):
-    order_stat: Literal["Pending", "Shipped", "Delivered", "Cancelled"]
+    order_stat: Literal["Pending", "Shipped", "Delivered", "Cancelled", "Returned"]
 
 
 
@@ -169,6 +222,11 @@ class VariantIn(BaseModel):
     stocks: int = Field(ge=0)
     is_avail: bool = True
     images: str | list[str] | None = None
+    # packed size and weight, for picking the Lalamove vehicle (app/delivery.py)
+    length_cm: float | None = Field(default=None, gt=0)
+    width_cm: float | None = Field(default=None, gt=0)
+    height_cm: float | None = Field(default=None, gt=0)
+    weight_kg: float | None = Field(default=None, gt=0)
 
 
 class ProductIn(BaseModel):

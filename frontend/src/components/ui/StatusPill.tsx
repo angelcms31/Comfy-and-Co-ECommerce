@@ -6,6 +6,7 @@ const styles: Record<OrderStat, string> = {
   Shipped: 'bg-mint text-forest',
   Delivered: 'bg-forest text-white',
   Cancelled: 'bg-cancelled text-cancelled-text',
+  Returned: 'bg-line text-muted',
 };
 
 export default function StatusPill({ status, className }: { status: OrderStat; className?: string }) {

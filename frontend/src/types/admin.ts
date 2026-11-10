@@ -63,11 +63,33 @@ export interface SecuritySettings {
   sessions_valid_after: string | null;
 }
 
+// one row of the Lalamove rate card (backend LALAMOVE_VEHICLES): cargo size, weight limit and the fare
+export interface DeliveryVehicle {
+  name: string;
+  length_cm: number;
+  width_cm: number;
+  height_cm: number;
+  max_kg: number;
+  base: number;
+  per_km: number;
+  tier_km: number | null; // the per_km rate applies up to here, per_km_after beyond it
+  per_km_after: number | null;
+  included_km: number; // km already covered by the base fare
+}
+
+export interface DeliverySettings {
+  store_lat: number;
+  store_lng: number;
+  max_km: number; // 0 = deliver anywhere
+  vehicles: DeliveryVehicle[];
+}
+
 export interface AllSettings {
   store: StoreSettings;
   policies: PolicySettings;
   regional: RegionalSettings;
   security: SecuritySettings;
+  delivery: DeliverySettings;
 }
 
 export type AuditAction = 'products' | 'orders' | 'reviews' | 'admins' | 'settings' | 'inventory';

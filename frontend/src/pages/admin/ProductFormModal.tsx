@@ -23,6 +23,11 @@ interface VariantForm {
   is_avail: boolean;
   images: string[];
   showSale: boolean;
+  // packed size and weight, so checkout can pick the Lalamove vehicle
+  length_cm: string;
+  width_cm: string;
+  height_cm: string;
+  weight_kg: string;
 }
 
 let nextKey = 1;
@@ -39,6 +44,10 @@ const emptyVariant = (): VariantForm => ({
   is_avail: true,
   images: [],
   showSale: false,
+  length_cm: '',
+  width_cm: '',
+  height_cm: '',
+  weight_kg: '',
 });
 
 function toForm(p: ProductWithVariants | null) {
@@ -61,6 +70,10 @@ function toForm(p: ProductWithVariants | null) {
           is_avail: v.is_avail,
           images: parseImages(v.images),
           showSale: v.pr_price != null,
+          length_cm: v.length_cm != null ? String(v.length_cm) : '',
+          width_cm: v.width_cm != null ? String(v.width_cm) : '',
+          height_cm: v.height_cm != null ? String(v.height_cm) : '',
+          weight_kg: v.weight_kg != null ? String(v.weight_kg) : '',
         }))
       : [emptyVariant()],
   };
@@ -84,6 +97,9 @@ function validate(form: Form): Errors {
     if (form.variants.length > 1 && !v.prod_attr.trim()) e[`${i}.prod_attr`] = 'Needed when there are 2+ variants';
     if (v.b_price === '' || Number(v.b_price) < 0) e[`${i}.b_price`] = 'Enter a price';
     if (v.stocks === '' || Number(v.stocks) < 0 || !Number.isInteger(Number(v.stocks))) e[`${i}.stocks`] = 'Whole number, 0 or more';
+    for (const k of ['length_cm', 'width_cm', 'height_cm', 'weight_kg'] as const) {
+      if (v[k] !== '' && !(Number(v[k]) > 0)) e[`${i}.${k}`] = 'More than 0';
+    }
 
     if (v.showSale && v.pr_price !== '') {
       if (Number(v.pr_price) >= Number(v.b_price)) e[`${i}.pr_price`] = 'Must be lower than the price';
@@ -117,6 +133,10 @@ function toInput(form: Form): ProductInput {
         stocks: Number(v.stocks),
         is_avail: v.is_avail,
         images: v.images.join(','),
+        length_cm: v.length_cm === '' ? null : Number(v.length_cm),
+        width_cm: v.width_cm === '' ? null : Number(v.width_cm),
+        height_cm: v.height_cm === '' ? null : Number(v.height_cm),
+        weight_kg: v.weight_kg === '' ? null : Number(v.weight_kg),
       };
     }),
   };
@@ -235,6 +255,21 @@ export default function ProductFormModal({ open, product, categories, onClose, o
                 <Input label="SKU" placeholder="e.g. SOF-001-BRO" filled value={v.sku} onChange={(e) => setVariant(i, { sku: e.target.value })} error={errors[`${i}.sku`]} />
                 <Input label="Price (₱)" type="number" min={0} step="0.01" inputMode="decimal" placeholder="e.g. 15000" filled value={v.b_price} onChange={(e) => setVariant(i, { b_price: e.target.value })} error={errors[`${i}.b_price`]} />
                 <Input label="Stock Quantity" type="number" min={0} step={1} inputMode="numeric" placeholder="e.g. 12" filled value={v.stocks} onChange={(e) => setVariant(i, { stocks: e.target.value })} error={errors[`${i}.stocks`]} />
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium text-ink">
+                  Packed size &amp; weight <span className="font-normal text-muted">(picks the Lalamove vehicle at checkout)</span>
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Input label="Length (cm)" type="number" min={0} step="0.1" inputMode="decimal" placeholder="e.g. 120" filled value={v.length_cm} onChange={(e) => setVariant(i, { length_cm: e.target.value })} error={errors[`${i}.length_cm`]} />
+                  <Input label="Width (cm)" type="number" min={0} step="0.1" inputMode="decimal" placeholder="e.g. 60" filled value={v.width_cm} onChange={(e) => setVariant(i, { width_cm: e.target.value })} error={errors[`${i}.width_cm`]} />
+                  <Input label="Height (cm)" type="number" min={0} step="0.1" inputMode="decimal" placeholder="e.g. 75" filled value={v.height_cm} onChange={(e) => setVariant(i, { height_cm: e.target.value })} error={errors[`${i}.height_cm`]} />
+                  <Input label="Weight (kg)" type="number" min={0} step="0.1" inputMode="decimal" placeholder="e.g. 18" filled value={v.weight_kg} onChange={(e) => setVariant(i, { weight_kg: e.target.value })} error={errors[`${i}.weight_kg`]} />
+                </div>
+                {(v.length_cm === '' || v.width_cm === '' || v.height_cm === '' || v.weight_kg === '') && (
+                  <p className="text-xs text-muted">Without all four, orders with this item are quoted at least an MPV 600 kg.</p>
+                )}
               </div>
 
               {v.showSale ? (

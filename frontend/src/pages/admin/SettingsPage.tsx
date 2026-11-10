@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KeyRound, Lock, Plus, RotateCcw, UserX, Download } from 'lucide-react';
+import { KeyRound, Lock, Plus, RotateCcw, UserX, Download, Trash2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Input, { Select } from '@/components/ui/Input';
@@ -21,7 +21,7 @@ import { ROLE_LABEL } from '@/lib/roles';
 import { emailError } from '@/lib/email';
 import { downloadCsv } from '@/lib/csv';
 import { isValidName, NAME_ERROR } from '@/lib/names';
-import type { AdminAccount, AdminRoleName, AllSettings, AuditAction, AuditLogRow, NewAdminInput } from '@/types/admin';
+import type { AdminAccount, AdminRoleName, AllSettings, AuditAction, AuditLogRow, DeliveryVehicle, NewAdminInput } from '@/types/admin';
 import AdminPageHeader from './AdminPageHeader';
 import { Card, FilterPills } from './AdminUi';
 
@@ -444,6 +444,24 @@ function StoreInfo({ settings }: { settings: ReturnType<typeof useAsync<AllSetti
       await adminService.saveStore(form.store);
       await adminService.savePolicies({ ...form.policies, free_shipping_threshold: Number(form.policies.free_shipping_threshold) || 0 });
       await adminService.saveRegional({ ...form.regional, vat_percent: Number(form.regional.vat_percent) || 0 });
+      await adminService.saveDelivery({
+        ...form.delivery,
+        store_lat: Number(form.delivery.store_lat),
+        store_lng: Number(form.delivery.store_lng),
+        max_km: Number(form.delivery.max_km) || 0,
+        vehicles: form.delivery.vehicles.map((v) => ({
+          ...v,
+          length_cm: Number(v.length_cm),
+          width_cm: Number(v.width_cm),
+          height_cm: Number(v.height_cm),
+          max_kg: Number(v.max_kg),
+          base: Number(v.base) || 0,
+          per_km: Number(v.per_km) || 0,
+          included_km: Number(v.included_km) || 0,
+          tier_km: v.tier_km === null || v.tier_km === ('' as unknown as number) ? null : Number(v.tier_km),
+          per_km_after: v.per_km_after === null || v.per_km_after === ('' as unknown as number) ? null : Number(v.per_km_after),
+        })),
+      });
       toast.success('Store settings saved');
       settings.reload();
     } catch (err) {
@@ -515,6 +533,11 @@ function StoreInfo({ settings }: { settings: ReturnType<typeof useAsync<AllSetti
         </Card>
       </div>
 
+      <DeliveryRates
+        delivery={form.delivery}
+        onChange={(delivery) => setForm((f) => f && { ...f, delivery })}
+      />
+
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-white p-4">
         <div>
           <p className="font-medium text-ink">Store Settings</p>
@@ -525,6 +548,94 @@ function StoreInfo({ settings }: { settings: ReturnType<typeof useAsync<AllSetti
         </Button>
       </div>
     </div>
+  );
+}
+
+// ---------- Lalamove delivery: where deliveries start and the vehicle rate card ----------
+
+const VEHICLE_COLS: { key: keyof DeliveryVehicle; label: string; width: string; optional?: boolean }[] = [
+  { key: 'name', label: 'Vehicle', width: 'w-44' },
+  { key: 'length_cm', label: 'L (cm)', width: 'w-20' },
+  { key: 'width_cm', label: 'W (cm)', width: 'w-20' },
+  { key: 'height_cm', label: 'H (cm)', width: 'w-20' },
+  { key: 'max_kg', label: 'Max kg', width: 'w-24' },
+  { key: 'base', label: 'Base ₱', width: 'w-24' },
+  { key: 'included_km', label: 'km in base', width: 'w-24' },
+  { key: 'per_km', label: '₱ / km', width: 'w-20' },
+  { key: 'tier_km', label: 'up to km', width: 'w-20', optional: true },
+  { key: 'per_km_after', label: '₱ / km after', width: 'w-24', optional: true },
+];
+
+const emptyVehicle = (): DeliveryVehicle => ({ name: '', length_cm: 0, width_cm: 0, height_cm: 0, max_kg: 0, base: 0, per_km: 0, tier_km: null, per_km_after: null, included_km: 0 });
+
+function DeliveryRates({ delivery, onChange }: { delivery: AllSettings['delivery']; onChange: (d: AllSettings['delivery']) => void }) {
+  const setVehicle = (i: number, patch: Partial<DeliveryVehicle>) =>
+    onChange({ ...delivery, vehicles: delivery.vehicles.map((v, j) => (j === i ? { ...v, ...patch } : v)) });
+
+  return (
+    <Card
+      title={<span className="text-lg">Lalamove Delivery Rates</span>}
+      actions={
+        <Button size="sm" variant="ghost" onClick={() => onChange({ ...delivery, vehicles: [...delivery.vehicles, emptyVehicle()] })}>
+          <Plus className="size-4" /> Add vehicle
+        </Button>
+      }
+    >
+      <p className="mb-3 text-sm text-muted">
+        Checkout picks the smallest vehicle the order fits in (by each item's packed size, the total weight and volume), then charges base fare + ₱/km for the
+        road distance from the store. "km in base" is distance the base fare already covers; "up to km / ₱ per km after" is for a cheaper rate on longer trips.
+        Vehicles are saved smallest to largest.
+      </p>
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <Input label="Store latitude" type="number" step="any" value={delivery.store_lat} onChange={(e) => onChange({ ...delivery, store_lat: e.target.value as unknown as number })} />
+        <Input label="Store longitude" type="number" step="any" value={delivery.store_lng} onChange={(e) => onChange({ ...delivery, store_lng: e.target.value as unknown as number })} />
+        <Input label="Max delivery distance (km)" type="number" min={0} hint="0 = no limit" value={delivery.max_km} onChange={(e) => onChange({ ...delivery, max_km: e.target.value as unknown as number })} />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-muted">
+              {VEHICLE_COLS.map((c) => (
+                <th key={c.key} className={cn('px-1 pb-1 font-medium', c.width)}>
+                  {c.label}
+                </th>
+              ))}
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {delivery.vehicles.map((v, i) => (
+              <tr key={i}>
+                {VEHICLE_COLS.map((c) => (
+                  <td key={c.key} className="px-1 py-1">
+                    <input
+                      aria-label={`${v.name || `Vehicle ${i + 1}`} ${c.label}`}
+                      type={c.key === 'name' ? 'text' : 'number'}
+                      min={0}
+                      step="any"
+                      placeholder={c.optional ? '–' : ''}
+                      value={v[c.key] ?? ''}
+                      onChange={(e) => setVehicle(i, { [c.key]: c.key === 'name' ? e.target.value : e.target.value === '' ? (c.optional ? null : ('' as unknown as number)) : Number(e.target.value) })}
+                      className="w-full rounded-lg border border-line px-2 py-1.5 text-sm focus:border-forest focus:outline-none focus:ring-2 focus:ring-mint"
+                    />
+                  </td>
+                ))}
+                <td className="px-1">
+                  <button
+                    type="button"
+                    aria-label={`Remove ${v.name || `vehicle ${i + 1}`}`}
+                    onClick={() => onChange({ ...delivery, vehicles: delivery.vehicles.filter((_, j) => j !== i) })}
+                    className="rounded-lg p-1 text-coral-dark hover:bg-cancelled/40"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 

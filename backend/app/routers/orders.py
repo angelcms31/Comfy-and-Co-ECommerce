@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from .. import queries
-from ..config import COURIERS, DELIVERY_FEE, IMAGE_BUCKET
+from .. import delivery, events, queries
+from ..config import COURIER, IMAGE_BUCKET
 from ..db import Db
 from ..deps import ADMIN_ROLES, current_user
 from ..pricing import effective_price
-from ..schemas import CancelOrderIn, GcashPaymentIn, PlaceOrderIn, RefundIn
+from ..schemas import CancelOrderIn, DeliveryFeedbackIn, DeliveryQuoteIn, GcashPaymentIn, PlaceOrderIn, RefundIn
 from ..supa import admin_client
 from .admin import images_text, store_image
 from .users import update_profile
@@ -13,6 +13,30 @@ from .users import update_profile
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 REFUND_PHOTO_FOLDER = "refunds/"
+
+
+def customer_view(order: dict) -> dict:
+    # the QR token is only for the printed receipt, the customer has the "Order received" button instead
+    order.pop("delivery_token", None)
+    return order
+
+
+def delivery_quote(db, settings: dict, wanted: dict[int, int], st_add: str, city_id: int, postal: str | None, lat: float | None, lng: float | None) -> dict:
+    rows = db.execute(
+        "select prod_var_id, prod_var_name, length_cm, width_cm, height_cm, weight_kg from prod_var where prod_var_id = any(%s)",
+        (list(wanted),),
+    ).fetchall()
+    items = [{**r, "quantity": wanted[r["prod_var_id"]]} for r in rows]
+    return delivery.quote(settings, items, lat, lng, queries.address_text(db, st_add, city_id, postal))
+
+
+@router.post("/delivery-quote")
+def quote_delivery(db: Db, body: DeliveryQuoteIn, user=Depends(current_user)):
+    # the checkout shows the vehicle, distance and fee for the address (or pin) before the order is placed
+    wanted: dict[int, int] = {}
+    for line in body.lines:
+        wanted[line.prod_var_id] = wanted.get(line.prod_var_id, 0) + line.quantity
+    return delivery_quote(db, queries.setting(db, "delivery"), wanted, body.st_add, body.city_id, body.postal, body.lat, body.lng)
 
 
 def next_order_num(db) -> str:
@@ -46,12 +70,10 @@ def place_order(db: Db, body: PlaceOrderIn, user=Depends(current_user)):
         if qty > v["stocks"]:
             raise HTTPException(400, f"Only {v['stocks']} left of {v['prod_var_name']}")
 
-    if body.fulfillment == "delivery" and body.courier not in COURIERS:
-        raise HTTPException(400, "Please pick a courier")
-
-    # one address per user, so the info confirmed at checkout is saved to their profile
+    # one address per user, so the info confirmed at checkout (and the map pin) is saved to their profile
     customer = body.customer.model_dump()
-    update_profile(db, user["user_id"], customer)
+    drop = body.drop_off
+    update_profile(db, user["user_id"], {**customer, "lat": drop.lat, "lng": drop.lng, "delivery_note": (drop.delivery_note or "").strip() or None})
 
     subtotal = total = 0
     items = []
@@ -63,15 +85,21 @@ def place_order(db: Db, body: PlaceOrderIn, user=Depends(current_user)):
         items.append((prod_var_id, v["prod_var_name"], price, qty, price * qty))
 
     # the delivery fee goes on top of the items; disc_amt stays the promo savings only (SCHEMA_GAPS #8)
-    fee = DELIVERY_FEE if body.fulfillment == "delivery" else 0
     address = queries.address_text(db, customer["st_add"], customer["city_id"], customer["postal"])
-    shipping_add = f"{address} (Standard Delivery via {body.courier})" if fee else f"Store pickup. Customer address: {address}"
+    if body.fulfillment == "delivery":
+        q = delivery_quote(db, queries.setting(db, "delivery"), wanted, customer["st_add"], customer["city_id"], customer["postal"], drop.lat, drop.lng)
+        shipping_add = f"{address} (Standard Delivery via {COURIER})"
+    else:
+        q = {"courier": None, "vehicle": None, "trips": 1, "distance_km": None, "delivery_fee": 0, "drop_lat": None, "drop_lng": None}
+        shipping_add = f"Store pickup. Customer address: {address}"
+    fee = q["delivery_fee"]
 
     # note: the checkout note has no column yet (SCHEMA_GAPS #2), so body.note isn't saved
     order = db.execute(
         """
-        insert into "order" (order_num, user_id, order_stat, subtotal, disc_amt, total_amt, payment_method, shipping_add)
-        values (%s, %s, 'Pending', %s, %s, %s, %s, %s)
+        insert into "order" (order_num, user_id, order_stat, subtotal, disc_amt, total_amt, payment_method, shipping_add,
+          courier, vehicle, trips, distance_km, delivery_fee, drop_lat, drop_lng, delivery_note)
+        values (%s, %s, 'Pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         returning order_id
         """,
         (
@@ -82,6 +110,14 @@ def place_order(db: Db, body: PlaceOrderIn, user=Depends(current_user)):
             total + fee,
             body.payment_method,
             shipping_add,
+            q["courier"],
+            q["vehicle"],
+            q["trips"],
+            q["distance_km"],
+            fee,
+            q["drop_lat"],
+            q["drop_lng"],
+            (drop.delivery_note or "").strip() or None if body.fulfillment == "delivery" else None,
         ),
     ).fetchone()
 
@@ -105,12 +141,13 @@ def place_order(db: Db, body: PlaceOrderIn, user=Depends(current_user)):
         """,
         (user["user_id"], list(wanted)),
     )
-    return queries.order_or_404(db, order["order_id"])
+    events.notify(db, order["order_id"], "placed")
+    return customer_view(queries.order_or_404(db, order["order_id"]))
 
 
 @router.get("/me")
 def my_orders(db: Db, user=Depends(current_user)):
-    return queries.orders_with_items(db, "where o.user_id = %s", (user["user_id"],))
+    return [customer_view(o) for o in queries.orders_with_items(db, "where o.user_id = %s", (user["user_id"],))]
 
 
 def own_order(db, user: dict, order_id: int) -> dict:
@@ -122,7 +159,7 @@ def own_order(db, user: dict, order_id: int) -> dict:
 
 @router.get("/{order_id}")
 def get_order(db: Db, order_id: int, user=Depends(current_user)):
-    return own_order(db, user, order_id)
+    return customer_view(own_order(db, user, order_id))
 
 
 @router.post("/{order_id}/cancel")
@@ -144,7 +181,8 @@ def cancel_order(db: Db, order_id: int, body: CancelOrderIn, user=Depends(curren
         """update "order" set order_stat = 'Cancelled', shipping_add = shipping_add || %s where order_id = %s""",
         (f" [Cancelled by buyer: {body.reason.strip()}]", order_id),
     )
-    return queries.order_or_404(db, order_id)
+    events.notify(db, order_id, "cancelled")
+    return customer_view(queries.order_or_404(db, order_id))
 
 
 @router.post("/{order_id}/received")
@@ -152,8 +190,33 @@ def mark_received(db: Db, order_id: int, user=Depends(current_user)):
     order = own_order(db, user, order_id)
     if order["order_stat"] != "Shipped":
         raise HTTPException(400, "Only orders that are on the way can be marked as received")
-    db.execute("""update "order" set order_stat = 'Delivered' where order_id = %s""", (order_id,))
-    return queries.order_or_404(db, order_id)
+    db.execute(
+        """update "order" set order_stat = 'Delivered', delivered_at = now(), delivered_by = 'customer' where order_id = %s""",
+        (order_id,),
+    )
+    events.notify(db, order_id, "received")
+    return customer_view(queries.order_or_404(db, order_id))
+
+
+@router.post("/{order_id}/delivery-feedback")
+def delivery_feedback(db: Db, order_id: int, body: DeliveryFeedbackIn, user=Depends(current_user)):
+    # "Did you get your order?" after the rider marked it delivered: yes closes the question, no is a report the admin sees on the order
+    order = own_order(db, user, order_id)
+    if order["user_id"] != user["user_id"]:
+        raise HTTPException(404, "Order not found")
+    if order["order_stat"] != "Delivered":
+        raise HTTPException(400, "This order has not been marked as delivered yet")
+    if order["receipt_confirmed_at"] or order["not_received_at"]:
+        raise HTTPException(400, "You already answered for this order")
+    if body.received:
+        db.execute('update "order" set receipt_confirmed_at = now() where order_id = %s', (order_id,))
+    else:
+        details = (body.details or "").strip()
+        if not details:
+            raise HTTPException(400, "Please tell us what happened")
+        db.execute('update "order" set not_received_report = %s, not_received_at = now() where order_id = %s', (details, order_id))
+    events.notify(db, order_id, "feedback", received=body.received)
+    return customer_view(queries.order_or_404(db, order_id))
 
 
 @router.post("/uploads")
@@ -179,7 +242,8 @@ def request_refund(db: Db, order_id: int, body: RefundIn, user=Depends(current_u
         "insert into refund (order_id, reason, details, amount, photos) values (%s, %s, %s, %s, %s)",
         (order_id, body.reason.strip(), details, order["total_amt"], images_text(body.photos)),
     )
-    return queries.order_or_404(db, order_id)
+    events.notify(db, order_id, "refund")
+    return customer_view(queries.order_or_404(db, order_id))
 
 
 @router.post("/{order_id}/gcash/confirm")
@@ -192,7 +256,7 @@ def confirm_gcash(db: Db, order_id: int, body: GcashPaymentIn, user=Depends(curr
         raise HTTPException(400, "This order is not paid with GCash")
     if order["_temp_payment_status"] in ("Paid", "For verification"):
         if order["_temp_payment_ref"] == body.reference:
-            return order
+            return customer_view(order)
         raise HTTPException(400, "We already have a reference number for this order")
     if order["order_stat"] != "Pending":
         raise HTTPException(400, "This order can't be paid anymore")
@@ -203,4 +267,5 @@ def confirm_gcash(db: Db, order_id: int, body: GcashPaymentIn, user=Depends(curr
     if used:
         raise HTTPException(400, "This reference number was already used for another order")
     queries.set_gcash_tag(db, order_id, "submitted", body.reference)
-    return queries.order_or_404(db, order_id)
+    events.notify(db, order_id, "payment")
+    return customer_view(queries.order_or_404(db, order_id))

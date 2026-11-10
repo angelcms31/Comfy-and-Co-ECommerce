@@ -11,11 +11,11 @@ from .. import audit, queries
 from ..config import SETTING_DEFAULTS
 from ..db import Db
 from ..deps import require_admin, require_super_admin
-from ..schemas import PolicySettingsIn, RegionalSettingsIn, SecuritySettingsIn, StoreSettingsIn
+from ..schemas import DeliverySettingsIn, PolicySettingsIn, RegionalSettingsIn, SecuritySettingsIn, StoreSettingsIn
 
 router = APIRouter(tags=["settings"])
 
-SECTION_LABEL = {"store": "store info", "policies": "order & refund policies", "regional": "regional & tax settings", "security": "security policies"}
+SECTION_LABEL = {"store": "store info", "policies": "order & refund policies", "regional": "regional & tax settings", "security": "security policies", "delivery": "delivery rates"}
 
 # words in audit_log.action for the "Filter by action" menu
 ACTION_FILTERS = {
@@ -64,6 +64,7 @@ section_endpoint("store", StoreSettingsIn)
 section_endpoint("policies", PolicySettingsIn)
 section_endpoint("regional", RegionalSettingsIn)
 section_endpoint("security", SecuritySettingsIn)
+section_endpoint("delivery", DeliverySettingsIn)
 
 
 @router.post("/admin/settings/force-logout")

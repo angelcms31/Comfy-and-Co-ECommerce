@@ -2,12 +2,17 @@ import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
+import LocationPicker from '@/components/order/LocationPicker';
 import { useAuth } from '@/context/AuthContext';
 import { userService } from '@/services/userService';
+import type { LatLng } from '@/lib/tracking';
 import { AddressFields, contactFromUser, contactPatch, NameMobileFields, validateContact, type ContactErrors, type ContactForm } from './AddressFields';
 
-// opened from "Edit details" on the checkout page; saves to the profile (one address per user)
+const MAX_NOTE = 300;
+
+// opened from "Edit details" on the checkout page; saves to the profile (one address per user), with the map pin and rider notes
 export default function ShippingPage() {
   const { user, updateUser } = useAuth();
   const toast = useToast();
@@ -15,12 +20,18 @@ export default function ShippingPage() {
   const { search } = useLocation(); // keeps a Buy Now item when going back to checkout
 
   const [form, setForm] = useState<ContactForm>(() => contactFromUser(user!));
+  const [pin, setPin] = useState<LatLng | null>(() => (user?.lat != null && user?.lng != null ? [user.lat, user.lng] : null));
+  const [note, setNote] = useState(user?.delivery_note ?? '');
   const [errors, setErrors] = useState<ContactErrors>({});
   const [saving, setSaving] = useState(false);
 
   if (!user) return null; // RequireLogin handles this
 
   const onChange = (patch: Partial<ContactForm>) => setForm((f) => ({ ...f, ...patch }));
+
+  // what the map looks for when there's no pin: the city name is known only while it's still the saved one
+  const cityName = form.city_id && form.city_id === String(user.city_id ?? '') ? (user.city?.city ?? '') : '';
+  const mapAddress = [form.st_add, cityName, form.postal, 'Philippines'].filter(Boolean).join(', ');
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -30,7 +41,14 @@ export default function ShippingPage() {
 
     setSaving(true);
     try {
-      updateUser(await userService.updateProfile(contactPatch(form)));
+      updateUser(
+        await userService.updateProfile({
+          ...contactPatch(form),
+          lat: pin?.[0] ?? null,
+          lng: pin?.[1] ?? null,
+          delivery_note: note.trim() || null,
+        }),
+      );
       toast.success('Shipping details saved.');
       navigate(`/checkout${search}`);
     } catch (err) {
@@ -52,6 +70,21 @@ export default function ShippingPage() {
             <NameMobileFields form={form} errors={errors} onChange={onChange} required disabled={saving} />
           </div>
           <AddressFields form={form} errors={errors} onChange={onChange} required disabled={saving} />
+
+          <div className="border-t border-line pt-4">
+            <LocationPicker value={pin} address={mapAddress} onChange={setPin} disabled={saving} />
+          </div>
+
+          <Textarea
+            label="Notes for the rider (optional)"
+            rows={2}
+            maxLength={MAX_NOTE}
+            placeholder="e.g. Blue gate beside the sari-sari store, call when you arrive"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            hint={`${note.length}/${MAX_NOTE}`}
+            disabled={saving}
+          />
         </div>
 
         <Button type="submit" size="lg" className="mt-8 w-full" loading={saving}>

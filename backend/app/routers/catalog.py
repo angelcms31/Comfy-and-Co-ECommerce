@@ -33,7 +33,7 @@ def units_sold(db) -> dict[int, int]:
         from order_item oi
         join "order" o on o.order_id = oi.order_id
         join prod_var v on v.prod_var_id = oi.prod_var_id
-        where o.order_stat <> 'Cancelled'
+        where o.order_stat not in ('Cancelled', 'Returned')
         group by v.product_id
         """
     ).fetchall()

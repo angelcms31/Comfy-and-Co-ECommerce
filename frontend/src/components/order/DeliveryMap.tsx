@@ -60,15 +60,17 @@ function placeName(address: string) {
 
 type Props = {
   address: string;
+  point?: LatLng | null; // the pin the customer dropped at checkout; without it the address is geocoded
   progress: number;
   pickup: boolean;
   courier?: string | null;
+  vehicle?: string | null; // the Lalamove vehicle booked for the order
   orderNum?: string;
 };
 
 // Map from the store to the delivery address with the road route and where the rider is, with the courier card under it.
 // pickup orders only show the store.
-export default function DeliveryMap({ address, progress, pickup, courier, orderNum }: Props) {
+export default function DeliveryMap({ address, point, progress, pickup, courier, vehicle, orderNum }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const boundsRef = useRef<L.LatLngBounds | null>(null);
@@ -92,7 +94,7 @@ export default function DeliveryMap({ address, progress, pickup, courier, orderN
       setStatus('ready');
     } else {
       (async () => {
-        const home = await geocode(address).catch(() => null);
+        const home = point ?? (await geocode(address).catch(() => null));
         if (cancelled) return;
         if (!home) {
           setStatus('not-found');
@@ -121,7 +123,8 @@ export default function DeliveryMap({ address, progress, pickup, courier, orderN
       mapRef.current = null;
       map.remove();
     };
-  }, [address, progress, pickup]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, point?.[0], point?.[1], progress, pickup]);
 
   const recenter = () => {
     const map = mapRef.current;
@@ -174,7 +177,9 @@ export default function DeliveryMap({ address, progress, pickup, courier, orderN
             <span className="grid size-9 shrink-0 place-items-center rounded-md border border-line bg-cream text-forest">
               <Truck className="size-4" />
             </span>
-            <p className="min-w-0 flex-1 truncate font-semibold text-ink">{courier ?? 'Courier'} Standard shipping</p>
+            <p className="min-w-0 flex-1 truncate font-semibold text-ink">
+              {courier ?? 'Courier'} {vehicle ? `· ${vehicle}` : 'Standard shipping'}
+            </p>
             <Link to="/contact" className="shrink-0 text-sm font-semibold text-forest-light hover:underline">
               Contact
             </Link>

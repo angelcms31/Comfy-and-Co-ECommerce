@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Download, FileSpreadsheet, FileText, PackageX } from 'lucide-react';
-import Button, { buttonClass } from '@/components/ui/Button';
+import { AlertTriangle, ChevronDown, Download, FileSpreadsheet, FileText, MapPin, PackageX, Printer } from 'lucide-react';
+import Button, { buttonClass, ButtonLink } from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Dropdown from '@/components/ui/Dropdown';
 import { Select } from '@/components/ui/Input';
@@ -13,6 +13,7 @@ import Table, { type Column } from '@/components/ui/Table';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { useAsync } from '@/hooks/useAsync';
+import { useOrderEvents, type OrderEvent } from '@/hooks/useOrderEvents';
 import { orderService } from '@/services/orderService';
 import { cn } from '@/lib/cn';
 import { downloadCsv } from '@/lib/csv';
@@ -28,14 +29,18 @@ import OrderItemsCell from './OrderItemsCell';
 import { FilterPills, SearchBox, StatCard, TodayChip } from './AdminUi';
 
 const PAGE_SIZE = 8;
-const STATUSES: OrderStat[] = ['Pending', 'Shipped', 'Delivered', 'Cancelled'];
+const STATUSES: OrderStat[] = ['Pending', 'Shipped', 'Delivered', 'Cancelled', 'Returned'];
+const FINAL: OrderStat[] = ['Cancelled', 'Returned']; // can't be changed again, and the stock went back
 
 const SELECT_STYLE: Record<OrderStat, string> = {
   Pending: 'bg-pending text-pending-text',
   Shipped: 'bg-mint text-forest',
   Delivered: 'bg-forest text-white select-arrow-light',
   Cancelled: 'bg-cancelled text-cancelled-text',
+  Returned: 'bg-line text-muted',
 };
+
+const DELIVERED_BY = { rider: 'by the rider (QR scan)', customer: 'by the customer', admin: 'by an admin' };
 
 // what each refund status can change to; Rejected and Refunded are final
 const REFUND_NEXT: Record<RefundStat, RefundStat[]> = {
@@ -54,24 +59,27 @@ const REFUND_STYLE: Record<RefundStat, string> = {
 
 type Tab = OrderStat | 'all' | 'refund';
 
-const EXPORT_COLUMNS = ['Order #', 'Customer', 'Items', 'Total', 'Payment', 'Status', 'Placed', 'Ship to'];
-const exportRow = (o: OrderWithItems, total: string | number) => [
+const EXPORT_COLUMNS = ['Order #', 'Customer', 'Items', 'Total', 'Delivery fee', 'Vehicle', 'Payment', 'Status', 'Placed', 'Ship to'];
+const exportRow = (o: OrderWithItems, total: string | number, fee: string | number) => [
   o.order_num,
   o.customer_name,
   o.items.map((i) => `${i.item_name} x${i.quantity}`).join('; '),
   total,
+  fee,
+  o.vehicle ? `${o.vehicle}${o.trips > 1 ? ` x${o.trips}` : ''}${o.distance_km != null ? ` (${o.distance_km} km)` : ''}` : parseShipping(o.shipping_add).pickup ? 'Pickup' : '',
   o.payment_method,
   o.order_stat,
   formatDateTime(o.placed_at),
   parseShipping(o.shipping_add).address,
 ];
+const php = (n: number) => `PHP ${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 const filterLabel = (tab: Tab) => (tab === 'all' ? 'All orders' : tab === 'refund' ? 'Refund requests' : `${tab} orders`);
 
 // the orders that are showing, as a spreadsheet file; who downloaded it and when goes at the bottom
 function exportCsv(orders: OrderWithItems[], tab: Tab, by: string | null | undefined) {
   downloadCsv('comfyco-orders', [
     EXPORT_COLUMNS,
-    ...orders.map((o) => exportRow(o, o.total_amt)),
+    ...orders.map((o) => exportRow(o, o.total_amt, o.delivery_fee)),
     [],
     [`${filterLabel(tab)}: ${orders.length}`],
     [downloadStamp(by)],
@@ -85,7 +93,7 @@ function exportPdf(orders: OrderWithItems[], tab: Tab, by: string | null | undef
     subtitle: `${filterLabel(tab)} · ${orders.length} ${orders.length === 1 ? 'order' : 'orders'}`,
     by,
     columns: EXPORT_COLUMNS,
-    rows: orders.map((o) => exportRow(o, `PHP ${Number(o.total_amt).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`)),
+    rows: orders.map((o) => exportRow(o, php(o.total_amt), php(o.delivery_fee))),
   });
 }
 
@@ -127,9 +135,72 @@ function OrderDetails({
           <dt className="text-muted">Payment</dt>
           <dd>{paymentLabel(order)}</dd>
           <dt className="text-muted">Fulfilment</dt>
-          <dd>{pickup ? 'Store pickup' : `Standard Delivery${courier ? ` via ${courier}` : ''}`}</dd>
+          <dd>
+            {pickup ? 'Store pickup' : `Delivery${courier ? ` via ${courier}` : ''}`}
+            {order.vehicle && (
+              <span className="block text-xs text-muted">
+                {order.vehicle}
+                {order.trips > 1 && ` × ${order.trips} trips`}
+                {order.distance_km != null && ` · ${order.distance_km} km`} · fee {formatPeso(order.delivery_fee)}
+              </span>
+            )}
+          </dd>
           <dt className="text-muted">{pickup ? 'Customer address' : 'Ship to'}</dt>
-          <dd>{address}</dd>
+          <dd>
+            {address}
+            {order.customer_mobile && <span className="block text-xs text-muted">{order.customer_mobile}</span>}
+            {order.drop_lat != null && order.drop_lng != null && (
+              <a
+                href={`https://www.google.com/maps?q=${order.drop_lat},${order.drop_lng}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-forest hover:underline"
+              >
+                <MapPin className="size-3.5" /> Customer's map pin
+              </a>
+            )}
+          </dd>
+          {order.delivery_note && (
+            <>
+              <dt className="text-muted">Rider note</dt>
+              <dd className="whitespace-pre-line">{order.delivery_note}</dd>
+            </>
+          )}
+          {order.attempts.length > 0 && (
+            <>
+              <dt className="text-muted">Failed attempts</dt>
+              <dd>
+                {order.attempts.map((a, i) => (
+                  <span key={a.attempt_id} className="block">
+                    {i + 1}. {a.reason}
+                    {a.note && ` (${a.note})`} <span className="text-muted">· {formatDateTime(a.attempted_at)}</span>
+                  </span>
+                ))}
+              </dd>
+            </>
+          )}
+          {order.delivered_at && (
+            <>
+              <dt className="text-muted">Delivered</dt>
+              <dd>
+                {formatDateTime(order.delivered_at)}
+                {order.delivered_by && <span className="text-muted"> · {DELIVERED_BY[order.delivered_by]}</span>}
+                {order.receipt_confirmed_at && <span className="block text-xs text-forest">Customer confirmed receipt {formatDateTime(order.receipt_confirmed_at)}</span>}
+              </dd>
+            </>
+          )}
+          {parseImages(order.proof_photos).length > 0 && (
+            <>
+              <dt className="text-muted">Proof photos</dt>
+              <dd className="flex flex-wrap gap-2">
+                {parseImages(order.proof_photos).map((src, i) => (
+                  <a key={src} href={src} target="_blank" rel="noreferrer" aria-label={`Open delivery photo ${i + 1}`}>
+                    <img src={src} alt="" className="size-20 rounded-lg border border-line object-cover" />
+                  </a>
+                ))}
+              </dd>
+            </>
+          )}
           {order.refund && (
             <>
               <dt className="text-muted">Refund</dt>
@@ -174,6 +245,23 @@ function OrderDetails({
           <dt className="font-semibold text-forest">Total</dt>
           <dd className="font-semibold text-forest">{formatPeso(order.total_amt)}</dd>
         </dl>
+        {order.not_received_at && (
+          <div className="rounded-xl bg-cancelled p-3 text-cancelled-text">
+            <p className="flex items-center gap-1.5 font-semibold">
+              <AlertTriangle className="size-4" /> Customer says this was NOT received ({formatDateTime(order.not_received_at)})
+            </p>
+            <p className="mt-1 whitespace-pre-line">{order.not_received_report}</p>
+            <p className="mt-1 text-xs">Check the rider's photos above and contact the customer.</p>
+          </div>
+        )}
+        {order.order_stat === 'Shipped' && !pickup && order.delivery_token && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-cream p-3">
+            <p className="text-ink">Print the receipt and tape it to the package. The rider scans its QR code at the door.</p>
+            <ButtonLink to={`/admin/orders/${order.order_id}/receipt`} size="sm">
+              <Printer className="size-4" /> Print receipt
+            </ButtonLink>
+          </div>
+        )}
         {order._temp_payment_status === 'For verification' && order.order_stat === 'Pending' && (
           <div className="rounded-xl bg-pending p-3 text-pending-text">
             <p className="font-medium">
@@ -211,6 +299,16 @@ export default function OrdersPage() {
     setSavedPdf(null);
   };
   const orders = useAsync(() => orderService.getAll(), []);
+  // live: new orders, rider scans, failed attempts and customer reports show up without a refresh
+  useOrderEvents('/ws/admin/orders', (e: OrderEvent & { received?: boolean; reason?: string; attempts?: number }) => {
+    orders.reload();
+    const num = `#${e.order_num}`;
+    if (e.event === 'placed') toast.info(`New order ${num}`);
+    else if (e.event === 'delivered') toast.success(`${num} delivered by the rider`);
+    else if (e.event === 'failed_attempt') toast.info(`${num}: delivery attempt ${e.attempts ?? ''} failed (${e.reason ?? ''})`);
+    else if (e.event === 'returned') toast.error(`${num} is coming back to the store`);
+    else if (e.event === 'feedback' && e.received === false) toast.error(`${num}: the customer says it was NOT received`);
+  });
   const [tab, setTab] = useState<Tab>('all');
   const [search, setSearch] = useState('');
   const [viewing, setViewing] = useState<OrderWithItems | null>(null);
@@ -235,7 +333,7 @@ export default function OrdersPage() {
   const currentPage = Math.min(page, pages);
   const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const [cancelling, setCancelling] = useState<OrderWithItems | null>(null);
+  const [cancelling, setCancelling] = useState<{ order: OrderWithItems; status: OrderStat } | null>(null); // Cancelled / Returned ask first
 
   const saveStatus = async (order: OrderWithItems, status: OrderStat) => {
     setSaving(order.order_id);
@@ -278,10 +376,10 @@ export default function OrdersPage() {
     }
   };
 
-  // cancelling can't be undone, so it asks first
+  // cancelling or returning can't be undone, so it asks first
   const changeStatus = (order: OrderWithItems, status: OrderStat) => {
     if (status === order.order_stat) return;
-    if (status === 'Cancelled') setCancelling(order);
+    if (FINAL.includes(status)) setCancelling({ order, status });
     else saveStatus(order, status);
   };
 
@@ -294,6 +392,11 @@ export default function OrdersPage() {
           <button onClick={() => setViewing(o)} className="font-medium text-forest underline-offset-2 hover:underline">
             #{o.order_num}
           </button>
+          {o.not_received_at && (
+            <button onClick={() => setViewing(o)} className="inline-flex items-center gap-1 rounded-full bg-cancelled px-2 py-0.5 text-[11px] font-semibold text-cancelled-text" title="The customer reported this order as not received">
+              <AlertTriangle className="size-3" /> Not received
+            </button>
+          )}
           {o._temp_payment_status === 'For verification' && o.order_stat === 'Pending' && (
             <Button size="sm" onClick={() => setViewing(o)}>
               Check payment
@@ -312,14 +415,14 @@ export default function OrdersPage() {
         <select
           aria-label={`Status of order ${o.order_num}`}
           value={o.order_stat}
-          disabled={o.order_stat === 'Cancelled' || saving === o.order_id}
+          disabled={FINAL.includes(o.order_stat) || saving === o.order_id}
           onChange={(e) => changeStatus(o, e.target.value as OrderStat)}
           className={cn(
             'cursor-pointer rounded-full border-0 py-1 pl-3 pr-8 text-xs font-semibold focus:ring-2 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-80',
             SELECT_STYLE[o.order_stat],
           )}
         >
-          {STATUSES.map((s) => (
+          {STATUSES.filter((s) => s !== 'Returned' || o.order_stat === 'Shipped').map((s) => (
             <option key={s} value={s} className="bg-white text-ink">
               {s}
             </option>
@@ -437,17 +540,24 @@ export default function OrdersPage() {
       <OrderDetails order={viewing} onClose={() => setViewing(null)} onPayment={savePayment} onShip={(o) => saveStatus(o, 'Shipped')} saving={saving === viewing?.order_id} />
       <ConfirmDialog
         open={!!cancelling}
-        title="Cancel this order?"
+        title={cancelling?.status === 'Returned' ? 'Mark this order as returned?' : 'Cancel this order?'}
         danger
-        loading={saving === cancelling?.order_id}
-        confirmLabel="Cancel order"
+        loading={saving === cancelling?.order.order_id}
+        confirmLabel={cancelling?.status === 'Returned' ? 'Mark as returned' : 'Cancel order'}
         onCancel={() => setCancelling(null)}
-        onConfirm={() => cancelling && saveStatus(cancelling, 'Cancelled')}
+        onConfirm={() => cancelling && saveStatus(cancelling.order, cancelling.status)}
         message={
-          <>
-            Order <strong className="text-ink">#{cancelling?.order_num}</strong> will be cancelled and its stock put back. A cancelled order can't be
-            reopened.
-          </>
+          cancelling?.status === 'Returned' ? (
+            <>
+              Order <strong className="text-ink">#{cancelling.order.order_num}</strong> will be marked as returned to the store and its stock put back. This can't be
+              undone.
+            </>
+          ) : (
+            <>
+              Order <strong className="text-ink">#{cancelling?.order.order_num}</strong> will be cancelled and its stock put back. A cancelled order can't be
+              reopened.
+            </>
+          )
         }
       />
       {/* the PDF is already saved; this just offers to open it right away */}

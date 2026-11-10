@@ -36,7 +36,7 @@ SUPPLIER_SELECT = """
          join prod_var v on v.prod_var_id = oi.prod_var_id
          join product p on p.product_id = v.product_id
          join item_categ c on c.item_categ_id = p.item_categ_id
-        where c.supplier_id = s.supplier_id and o.order_stat <> 'Cancelled') as units_sold
+        where c.supplier_id = s.supplier_id and o.order_stat not in ('Cancelled', 'Returned')) as units_sold
     from supplier s
 """
 

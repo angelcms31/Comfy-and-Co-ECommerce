@@ -112,7 +112,7 @@ def set_gcash_tag(db, order_id: int, state: str, reference: str) -> None:
 def orders_with_items(db, where: str = "", params: tuple = ()) -> list[dict]:
     orders = db.execute(
         f"""
-        select o.*, u.full_name as customer_name,
+        select o.*, u.full_name as customer_name, u.mobile_no as customer_mobile,
           case when r.refund_id is null then null else row_to_json(r) end as refund
         from "order" o join "user" u on u.user_id = o.user_id
         left join refund r on r.order_id = o.order_id
@@ -132,8 +132,12 @@ def orders_with_items(db, where: str = "", params: tuple = ()) -> list[dict]:
         """,
         (ids,),
     ).fetchall()
+    attempts = db.execute(
+        "select * from delivery_attempt where order_id = any(%s) order by attempted_at", (ids,)
+    ).fetchall()
     for o in orders:
         o["items"] = [i for i in items if i["order_id"] == o["order_id"]]
+        o["attempts"] = [a for a in attempts if a["order_id"] == o["order_id"]]  # the rider's failed hand-overs
         o["_temp_payment_status"], o["_temp_payment_ref"] = payment_status(o["shipping_add"])
     return orders
 

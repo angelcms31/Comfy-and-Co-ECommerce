@@ -33,6 +33,10 @@ export interface User {
   postal: string | null;
   city_id: number | null;
   date_added: string;
+  // migrations/011_courier_delivery.sql: the pin on the map (null = the typed address is located) and notes for the rider
+  lat: number | null;
+  lng: number | null;
+  delivery_note: string | null;
 }
 
 export interface ItemCateg {
@@ -64,6 +68,11 @@ export interface ProdVar {
   is_avail: boolean;
   images: string | string[] | null; // use parseImages()
   date_added: string;
+  // packed size and weight, for picking the Lalamove vehicle (migrations/011_courier_delivery.sql)
+  length_cm: number | null;
+  width_cm: number | null;
+  height_cm: number | null;
+  weight_kg: number | null;
 }
 
 export interface WishlistCol {
@@ -92,8 +101,18 @@ export interface CartItem {
   quantity: number;
 }
 
-export type OrderStat = 'Pending' | 'Shipped' | 'Delivered' | 'Cancelled';
-export const ORDER_STATUSES: OrderStat[] = ['Pending', 'Shipped', 'Delivered', 'Cancelled'];
+// Returned: the rider failed to deliver it 3 times (or an admin set it), the package is back at the store
+export type OrderStat = 'Pending' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Returned';
+export const ORDER_STATUSES: OrderStat[] = ['Pending', 'Shipped', 'Delivered', 'Cancelled', 'Returned'];
+
+// delivery_attempt table: each time the rider couldn't hand the package over
+export interface DeliveryAttempt {
+  attempt_id: number;
+  order_id: number;
+  reason: string;
+  note: string | null;
+  attempted_at: string;
+}
 
 export type RefundStat = 'Requested' | 'Approved' | 'Rejected' | 'Refunded';
 
@@ -124,6 +143,22 @@ export interface Order {
   payment_method: PaymentMethod;
   shipping_add: string;
   placed_at: string;
+  // Lalamove delivery (migrations/011_courier_delivery.sql), all null / 0 for store pickup
+  courier: string | null;
+  vehicle: string | null;
+  trips: number;
+  distance_km: number | null;
+  delivery_fee: number;
+  drop_lat: number | null;
+  drop_lng: number | null;
+  delivery_note: string | null;
+  delivery_token?: string | null; // only in the admin endpoints, for the receipt's QR code
+  delivered_at: string | null;
+  delivered_by: 'rider' | 'customer' | 'admin' | null;
+  proof_photos: string | null; // comma separated URLs, the rider's photos
+  receipt_confirmed_at: string | null; // the customer said they got it
+  not_received_report: string | null; // the customer said they didn't, and what happened
+  not_received_at: string | null;
   _temp_note?: string | null;
   _temp_payment_status?: PaymentStatus;
   _temp_payment_ref?: string | null;

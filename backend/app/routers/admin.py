@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from psycopg import errors
 
-from .. import audit, queries
+from .. import audit, delivery, events, queries
 from ..config import IMAGE_BUCKET, LOW_STOCK_LIMIT, TIMEZONE
 from ..db import Db
 from ..deps import require_admin, require_super_admin
@@ -48,7 +48,7 @@ def daily_chart(db, period: str, day: date) -> tuple[list[dict], float]:
         """
         select (placed_at at time zone %s)::date as day, sum(total_amt) as total
         from "order"
-        where order_stat <> 'Cancelled' and (placed_at at time zone %s)::date between %s and %s
+        where order_stat not in ('Cancelled', 'Returned') and (placed_at at time zone %s)::date between %s and %s
         group by 1
         """,
         (TIMEZONE, TIMEZONE, start, day),
@@ -80,7 +80,7 @@ def monthly_chart(db, period: str, day: date) -> list[dict]:
         """
         select date_trunc('month', placed_at at time zone %s)::date as month, sum(total_amt) as total
         from "order"
-        where order_stat <> 'Cancelled' and (placed_at at time zone %s)::date >= %s
+        where order_stat not in ('Cancelled', 'Returned') and (placed_at at time zone %s)::date >= %s
         group by 1
         """,
         (TIMEZONE, TIMEZONE, start),
@@ -177,12 +177,14 @@ def save_product(db, product_id: int | None, body: ProductIn) -> int:
         values = (
             v.sku.strip().upper(), v.prod_var_name.strip(), v.prod_attr, v.b_price, v.pr_price,
             v.pr_start, v.pr_end, v.stocks, v.is_avail, images_text(v.images),
+            v.length_cm, v.width_cm, v.height_cm, v.weight_kg,
         )
         if v.prod_var_id:
             updated = db.execute(
                 """
                 update prod_var set sku = %s, prod_var_name = %s, prod_attr = %s, b_price = %s, pr_price = %s,
-                  pr_start = %s, pr_end = %s, stocks = %s, is_avail = %s, images = %s
+                  pr_start = %s, pr_end = %s, stocks = %s, is_avail = %s, images = %s,
+                  length_cm = %s, width_cm = %s, height_cm = %s, weight_kg = %s
                 where prod_var_id = %s and product_id = %s
                 """,
                 (*values, v.prod_var_id, product_id),
@@ -193,8 +195,8 @@ def save_product(db, product_id: int | None, body: ProductIn) -> int:
             db.execute(
                 """
                 insert into prod_var (product_id, sku, prod_var_name, prod_attr, b_price, pr_price,
-                  pr_start, pr_end, stocks, is_avail, images)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                  pr_start, pr_end, stocks, is_avail, images, length_cm, width_cm, height_cm, weight_kg)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (product_id, *values),
             )
@@ -275,7 +277,7 @@ async def upload_image(file: UploadFile = File(...)):
 @router.get("/orders")
 def all_orders(
     db: Db,
-    status: Literal["Pending", "Shipped", "Delivered", "Cancelled"] | None = None,
+    status: Literal["Pending", "Shipped", "Delivered", "Cancelled", "Returned"] | None = None,
     q: str | None = None,
 ):
     where, params = [], []
@@ -288,6 +290,12 @@ def all_orders(
     return queries.orders_with_items(db, ("where " + " and ".join(where)) if where else "", tuple(params))
 
 
+@router.get("/orders/{order_id}")
+def one_order(db: Db, order_id: int, user=Depends(require_admin)):
+    # with the delivery_token, for the receipt's QR code
+    return queries.order_or_404(db, order_id)
+
+
 @router.patch("/orders/{order_id}/status")
 def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, user=Depends(require_admin)):
     order = db.execute(
@@ -295,8 +303,10 @@ def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, 
     ).fetchone()
     if not order:
         raise HTTPException(404, "Order not found")
-    if order["order_stat"] == "Cancelled" and body.order_stat != "Cancelled":
-        raise HTTPException(400, "A cancelled order can't be reopened")
+    if order["order_stat"] in ("Cancelled", "Returned") and body.order_stat != order["order_stat"]:
+        raise HTTPException(400, f"A {order['order_stat'].lower()} order can't be reopened")
+    if body.order_stat == "Returned" and order["order_stat"] != "Shipped":
+        raise HTTPException(400, "Only an order that is out for delivery can be returned to the store")
     if (
         order["order_stat"] == "Pending"
         and body.order_stat in ("Shipped", "Delivered")
@@ -305,7 +315,7 @@ def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, 
     ):
         raise HTTPException(400, "Confirm the GCash payment before shipping this order")
 
-    if body.order_stat == "Cancelled" and order["order_stat"] != "Cancelled":
+    if body.order_stat in ("Cancelled", "Returned") and order["order_stat"] != body.order_stat:
         # put the stock back
         db.execute(
             """
@@ -316,8 +326,16 @@ def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, 
         )
 
     db.execute('update "order" set order_stat = %s where order_id = %s', (body.order_stat, order_id))
+    if body.order_stat == "Shipped":
+        # the QR code on the printed receipt: the Lalamove rider scans it at the door to mark the order delivered
+        db.execute(
+            'update "order" set delivery_token = %s where order_id = %s and delivery_token is null', (delivery.new_token(), order_id)
+        )
+    if body.order_stat == "Delivered" and order["order_stat"] != "Delivered":
+        db.execute("""update "order" set delivered_at = now(), delivered_by = 'admin' where order_id = %s""", (order_id,))
     if body.order_stat != order["order_stat"]:
         audit.log(db, request, user, f"Changed order status: #{order['order_num']} to {body.order_stat}")
+        events.notify(db, order_id, "status")
     return queries.order_or_404(db, order_id)
 
 
@@ -333,6 +351,7 @@ def decide_gcash(db: Db, request: Request, order_id: int, body: GcashDecisionIn,
     queries.set_gcash_tag(db, order_id, "paid" if body.decision == "confirm" else "rejected", reference)
     verb = "Confirmed" if body.decision == "confirm" else "Rejected"
     audit.log(db, request, user, f"{verb} GCash payment: #{order['order_num']} (ref {reference})")
+    events.notify(db, order_id, "payment")
     return queries.order_or_404(db, order_id)
 
 
@@ -361,4 +380,5 @@ def update_refund(db: Db, request: Request, order_id: int, body: RefundStatusIn,
             raise HTTPException(400, f"A refund can't go from {old} back to {body.refund_stat}")
         db.execute("update refund set refund_stat = %s, updated_at = now() where order_id = %s", (body.refund_stat, order_id))
         audit.log(db, request, user, f"Changed refund status: #{refund['order_num']} to {body.refund_stat}")
+        events.notify(db, order_id, "refund")
     return queries.order_or_404(db, order_id)

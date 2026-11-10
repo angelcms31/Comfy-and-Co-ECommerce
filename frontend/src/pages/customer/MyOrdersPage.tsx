@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useCart } from '@/context/CartContext';
 import WriteReviewModal from '@/features/reviews/components/WriteReviewModal';
 import { useAsync } from '@/hooks/useAsync';
+import { useOrderEvents } from '@/hooks/useOrderEvents';
 import { orderService } from '@/services/orderService';
 import type { RefundStat } from '@/types/db';
 import type { OrderWithItems } from '@/types/models';
@@ -18,7 +19,7 @@ import { formatDate } from '@/lib/dates';
 import { firstImage } from '@/lib/images';
 import { MAX_SEARCH } from '@/lib/constants';
 import { formatPeso } from '@/lib/pricing';
-import { ORDER_TABS, orderTab, parseShipping, type OrderTab } from '@/lib/tracking';
+import { awaitingReceipt, ORDER_TABS, orderTab, parseShipping, type OrderTab } from '@/lib/tracking';
 
 const CHIP: Record<Exclude<OrderTab, 'all'>, { label: string; className: string }> = {
   to_pay: { label: 'To Pay', className: 'bg-pending text-pending-text' },
@@ -65,8 +66,13 @@ function statusLine(order: OrderWithItems) {
       return { icon: ReceiptText, bold: r.bold, text: r.text };
     }
     case 'completed':
+      if (order.not_received_at) return { icon: XCircle, bold: 'Reported as not received.', text: "We're checking with the rider and will get back to you." };
+      if (awaitingReceipt(order)) return { icon: PackageCheck, bold: 'Marked delivered by the rider.', text: 'Please confirm you received it, or report it if you did not.' };
       return { icon: PackageCheck, bold: pickup ? 'Picked up.' : 'Delivered.', text: pickup ? 'You picked up this order.' : 'Your package has been delivered.' };
     default:
+      if (order.order_stat === 'Returned') {
+        return { icon: XCircle, bold: 'Returned to store.', text: `The rider could not deliver it after ${order.attempts.length} attempts. Contact us to arrange a new delivery.` };
+      }
       return {
         icon: XCircle,
         bold: 'Cancelled.',
@@ -81,12 +87,16 @@ function OrderCard({
   onReceived,
   onReview,
   onRefund,
+  onGotIt,
+  onNotReceived,
 }: {
   order: OrderWithItems;
   onCancel: () => void;
   onReceived: () => void;
   onReview: () => void;
   onRefund: () => void;
+  onGotIt: () => void;
+  onNotReceived: () => void;
 }) {
   const navigate = useNavigate();
   const { addItem } = useCart();
@@ -135,7 +145,20 @@ function OrderCard({
         Order Received
       </Button>
     ),
-    completed: (
+    completed: awaitingReceipt(order) ? (
+      <>
+        <Button variant="outline" size="sm" onClick={onNotReceived}>
+          Not Received
+        </Button>
+        <Button size="sm" onClick={onGotIt}>
+          Yes, I Received It
+        </Button>
+      </>
+    ) : order.not_received_at ? (
+      <ButtonLink to={support} variant="outline" size="sm">
+        Contact Support
+      </ButtonLink>
+    ) : (
       <>
         <Button variant="outline" size="sm" onClick={onRefund}>
           Request Refund
@@ -145,11 +168,16 @@ function OrderCard({
         </Button>
       </>
     ),
-    cancelled: (
-      <Button size="sm" onClick={buyAgain}>
-        Buy Again
-      </Button>
-    ),
+    cancelled:
+      order.order_stat === 'Returned' ? (
+        <ButtonLink to={support} size="sm">
+          Contact Support
+        </ButtonLink>
+      ) : (
+        <Button size="sm" onClick={buyAgain}>
+          Buy Again
+        </Button>
+      ),
     refund:
       order.refund?.refund_stat === 'Rejected' ? (
         <ButtonLink to={support} variant="outline" size="sm">
@@ -157,7 +185,7 @@ function OrderCard({
         </ButtonLink>
       ) : null,
   }[tab];
-  const chip = order.refund ? REFUND[order.refund.refund_stat] : CHIP[tab];
+  const chip = order.refund ? REFUND[order.refund.refund_stat] : order.order_stat === 'Returned' ? { label: 'Returned', className: CHIP.cancelled.className } : CHIP[tab];
 
   return (
     <li className="overflow-hidden rounded-card border border-ink/20 bg-white">
@@ -207,6 +235,8 @@ function OrderCard({
 export default function MyOrdersPage() {
   const { data: orders, loading, error, reload } = useAsync(() => orderService.getMine(), []);
   const toast = useToast();
+  // any change to one of my orders (shipped, delivered by the rider, ...) refreshes the list right away
+  useOrderEvents('/ws/me/orders', reload);
   const [tab, setTab] = useState<OrderTab>('all');
   const [q, setQ] = useState('');
   const [cancelling, setCancelling] = useState<OrderWithItems | null>(null);
@@ -217,6 +247,8 @@ export default function MyOrdersPage() {
   const [refundReason, setRefundReason] = useState(REFUND_REASONS[0]);
   const [refundDetails, setRefundDetails] = useState('');
   const [refundPhotos, setRefundPhotos] = useState<string[]>([]);
+  const [reporting, setReporting] = useState<OrderWithItems | null>(null); // "I didn't receive it"
+  const [reportDetails, setReportDetails] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   // "Other" can be something a photo can't show, every other reason is about the item itself
   const photoNeeded = refundReason !== 'Other';
@@ -239,6 +271,7 @@ export default function MyOrdersPage() {
       toast.success(done);
       setCancelling(null);
       setRefunding(null);
+      setReporting(null);
       reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Something went wrong');
@@ -317,6 +350,11 @@ export default function MyOrdersPage() {
                 setRefundDetails('');
                 setRefundPhotos([]);
                 setRefunding(o);
+              }}
+              onGotIt={() => run(() => orderService.deliveryFeedback(o.order_id, true), 'Thanks for confirming! Enjoy your new furniture.')}
+              onNotReceived={() => {
+                setReportDetails('');
+                setReporting(o);
               }}
             />
           ))}
@@ -404,6 +442,40 @@ export default function MyOrdersPage() {
             onUploadingChange={setUploadingPhoto}
           />
         </div>
+      </Modal>
+
+      <Modal
+        open={!!reporting}
+        onClose={() => !busy && setReporting(null)}
+        title="Order not received?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setReporting(null)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={busy}
+              disabled={!reportDetails.trim()}
+              onClick={() => reporting && run(() => orderService.deliveryFeedback(reporting.order_id, false, reportDetails.trim()), 'Report sent. We will check with the rider and contact you.')}
+            >
+              Send report
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-4 text-sm text-muted">
+          The rider marked order #{reporting?.order_num} as delivered. Tell us what happened and we'll look into it right away.
+        </p>
+        <Textarea
+          label="What happened?"
+          rows={4}
+          maxLength={500}
+          value={reportDetails}
+          onChange={(e) => setReportDetails(e.target.value)}
+          placeholder="e.g., Nobody came to our house today and the photo is not our gate."
+        />
       </Modal>
 
       <WriteReviewModal order={reviewing} onClose={() => setReviewing(null)} />

@@ -1,5 +1,5 @@
 import type {
-  CartItem, City, Country, ItemCateg, Order, OrderItem, OrderStat, PaymentMethod, ProdVar, Product, Refund, User,
+  CartItem, City, Country, DeliveryAttempt, ItemCateg, Order, OrderItem, OrderStat, PaymentMethod, ProdVar, Product, Refund, User,
   UserRoleName, WishlistItem,
 } from './db';
 
@@ -43,7 +43,9 @@ export type OrderLine = OrderItem & {
 
 export type OrderWithItems = Order & {
   items: OrderLine[];
+  attempts: DeliveryAttempt[]; // the rider's failed hand-overs, oldest first
   customer_name: string;
+  customer_mobile: string | null;
   refund: Refund | null; // null until the customer asks for a refund
 };
 
@@ -53,7 +55,52 @@ export interface PlaceOrderInput {
   customer: Pick<User, 'full_name' | 'mobile_no' | 'st_add' | 'postal' | 'city_id'>;
   note?: string;
   fulfillment: Fulfillment;
-  courier?: string;
+  drop_off?: DropOff; // where the Lalamove rider goes; the pin is optional
+}
+
+export interface DropOff {
+  lat: number | null;
+  lng: number | null;
+  delivery_note: string | null;
+}
+
+// POST /orders/delivery-quote: what a delivery would cost before the order is placed
+export interface DeliveryQuote {
+  courier: string;
+  vehicle: string;
+  trips: number;
+  distance_km: number;
+  by_road: boolean; // false when the route server was down and the distance is a straight-line estimate
+  delivery_fee: number;
+  drop_lat: number;
+  drop_lng: number;
+  located_by: 'pin' | 'address';
+  unmeasured: string[]; // items with no size/weight saved, the vehicle is a guess for them
+}
+
+// GET /delivery/<order>/<token>: what the rider sees after scanning the receipt
+export interface RiderOrder {
+  order_id: number;
+  order_num: string;
+  order_stat: OrderStat;
+  payment_method: PaymentMethod;
+  total_amt: number;
+  collect_amt: number; // cash to collect at the door (0 when paid with GCash)
+  address: string;
+  vehicle: string | null;
+  trips: number;
+  drop_lat: number | null;
+  drop_lng: number | null;
+  delivery_note: string | null;
+  delivered_at: string | null;
+  delivered_by: 'rider' | 'customer' | 'admin' | null;
+  proof_photos: string | null;
+  customer_name: string;
+  mobile_no: string | null;
+  items: { item_name: string; quantity: number }[];
+  attempts: Pick<DeliveryAttempt, 'reason' | 'note' | 'attempted_at'>[];
+  max_attempts: number; // after this many failed attempts the order is Returned
+  reasons: string[]; // what the rider can pick for a failed attempt
 }
 
 export type Fulfillment = 'delivery' | 'pickup';

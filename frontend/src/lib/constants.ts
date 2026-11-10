@@ -27,9 +27,8 @@ export const CATEGORY_PHOTOS: Record<string, number> = {
   'Kitchen Dining': 24, // Middle Brown Oak Veneer Dining Board with Wine Rack and Rattan Door
 };
 
-// checkout: must match DELIVERY_FEE and COURIERS in backend/app/config.py
-export const DELIVERY_FEE = 100;
-export const COURIERS = ['J&T Express', 'LBC', 'Flash Express', 'Ninja Van'] as const;
+// every delivery is one Lalamove booking (backend COURIER); the fee comes from POST /orders/delivery-quote
+export const COURIER = 'Lalamove';
 export const DELIVERY_DAYS = [3, 5]; // shown as "Estimated Oct 13-15"
 export const STORE_ADDRESS = 'General Luna cor. Muralla St, Intramuros, Manila, 1002 Metro Manila';
 export const STORE_LOCATION: [number, number] = [14.58689, 120.97636]; // lat, lng of STORE_ADDRESS, where deliveries start on the tracking map

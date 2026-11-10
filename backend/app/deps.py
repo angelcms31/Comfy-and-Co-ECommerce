@@ -28,6 +28,11 @@ def issued_at(token: str) -> datetime | None:
 
 
 def current_user(db: Db, token: str = Depends(get_token)) -> dict:
+    return user_from_token(db, token)
+
+
+def user_from_token(db, token: str) -> dict:
+    # also used by the WebSocket endpoints (routers/ws.py), where the token comes from the query string
     try:
         res = admin_client().auth.get_user(token)
     except Exception:

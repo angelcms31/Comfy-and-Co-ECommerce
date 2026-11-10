@@ -116,7 +116,9 @@ Each user has one `wishlist_col`. Create it on the first add. All return `Wishli
 | GET | `/orders/me` | – | `OrderWithItems[]`, newest first |
 | GET | `/orders/{order_id}` | – | `OrderWithItems` (only the owner or an admin). Each item also has `product_id`, `color` and `images` from its variant |
 | POST | `/orders/{order_id}/cancel` | `{ reason }` | `OrderWithItems`; only `Pending` orders, puts the stock back (SCHEMA_GAPS #20) |
-| POST | `/orders/{order_id}/received` | – | `OrderWithItems`; the customer confirms a `Shipped` order, it becomes `Delivered` |
+| POST | `/orders/{order_id}/received` | – | `OrderWithItems`; the customer confirms a `Shipped` order, it becomes `Delivered` (`delivered_by` = `customer`) |
+| POST | `/orders/delivery-quote` | `{ lines, st_add, postal, city_id, lat?, lng? }` | `DeliveryQuote`: the Lalamove `vehicle` picked from the items' packed size and weight, `trips`, road `distance_km` from the store, `delivery_fee`, the drop-off point and `located_by` (`pin` / `address`). 400 when the address can't be found on the map or is past Settings > Delivery `max_km` |
+| POST | `/orders/{order_id}/delivery-feedback` | `{ received, details? }` | `OrderWithItems`; after the rider marked it `Delivered`: `received: true` sets `receipt_confirmed_at`, `false` needs `details` and sets `not_received_report` / `not_received_at` (shown to admins on the order) |
 | POST | `/orders/uploads` | image file | `{ url }`; a refund photo, up to 5 MB (any logged in customer) |
 | POST | `/orders/{order_id}/gcash/confirm` | `{ reference }` (13 digits) | `OrderWithItems`; the order's owner sends the reference number after scanning the store's QR, only while `Pending`. `_temp_payment_status` becomes `For verification` (SCHEMA_GAPS #2) |
 
@@ -178,8 +180,9 @@ Every change below is written to `audit_log` (who, what, IP, device).
 | PATCH | `/admin/products/{product_id}/archive` | `{ archived }` | `ProductWithVariants`; archived = `is_avail` false, hidden from the store |
 | DELETE | `/admin/products/{product_id}` | – | 204, **Super Admin only** |
 | POST | `/admin/uploads` | multipart `file` (JPG / PNG / WEBP, max 5 MB) | `{ url }`, put it in `prod_var.images` |
-| GET | `/admin/orders` | `status`, `q` (order # or customer name) | `OrderWithItems[]`, newest first |
-| PATCH | `/admin/orders/{order_id}/status` | `{ order_stat }` | `OrderWithItems`; cancelling puts the stock back |
+| GET | `/admin/orders` | `status`, `q` (order # or customer name) | `OrderWithItems[]`, newest first, with `delivery_token` |
+| GET | `/admin/orders/{order_id}` | – | `OrderWithItems` with `delivery_token` (for the receipt's QR code) |
+| PATCH | `/admin/orders/{order_id}/status` | `{ order_stat }` | `OrderWithItems`; `Shipped` makes the `delivery_token` for the receipt's QR code; `Cancelled` / `Returned` put the stock back and are final (`Returned` only from `Shipped`) |
 | GET | `/admin/reviews` | – | `AdminReviews`: `ProductReviews` + `pendingReplies`, `hiddenCount`; includes hidden reviews |
 | PATCH | `/admin/reviews/{review_id}` | `{ is_hidden?, is_featured? }` | `ReviewWithMeta` |
 | POST | `/admin/reviews/{review_id}/reply` | `{ reply }` | `ReviewWithMeta` |
@@ -202,6 +205,26 @@ Every change below is written to `audit_log` (who, what, IP, device).
 | POST | `/admin/purchase-orders/{po_id}/receive` | `{ items: [{ po_item_id, good, damaged, defect_type? }], notes? }` | the order. `good` units are added to `prod_var.stocks`; `damaged` units become a `receiving` defect report tied to the order (`po_id`). Status becomes Received when nothing is left, else Partly received |
 | PATCH | `/admin/purchase-orders/{po_id}` | `{ status: "Cancelled" }` and/or `{ expected_date?, notes? }` | the order; cancelling marks the units still to come as cancelled, received ones stay in stock |
 
+## Delivery (the Lalamove rider, no login)
+
+The receipt printed when an order ships carries a QR code with `/deliver/{order_num}/{delivery_token}`. The token is the key, nothing else is checked.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/delivery/{order_num}/{token}` | – | `RiderOrder`: customer name and mobile, address, map pin, note, items, `collect_amt` (COD total, 0 when paid by GCash), failed `attempts`, `max_attempts`, `reasons`. 404 for a wrong token |
+| POST | `/delivery/{order_num}/{token}/confirm` | multipart `photos` (1–3 images) | `RiderOrder`; only while `Shipped`: the order becomes `Delivered` (`delivered_by` = `rider`, `proof_photos` saved under `deliveries/`) |
+| POST | `/delivery/{order_num}/{token}/failed` | form `reason` (one of `reasons`), `note?` | `RiderOrder`; adds a `delivery_attempt`. On the 3rd failed attempt the order becomes `Returned` and the stock goes back |
+
+## Live updates (WebSocket)
+
+The access token goes in the query string (`?token=`), since browsers can't set headers on a WebSocket. Every message is JSON. Whenever an order changes (placed, status, payment, shipped, delivered by the rider, failed attempt, returned, customer feedback, refund) the server sends `{ "type": "order", "event", "order_id", "order_num", "order_stat", "at" }` and the page reloads that order. `{ "type": "ping" }` comes every 25 s and can be ignored. Close codes: 4401 bad token, 4403 not an admin, 4404 not your order.
+
+| Path | Who | Gets |
+|---|---|---|
+| `/ws/orders/{order_id}` | the order's owner or an admin | changes to that order |
+| `/ws/me/orders` | logged in customer | changes to any of their orders |
+| `/ws/admin/orders` | admins | changes to every order |
+
 ## Super Admin only (403 for regular admins)
 
 | Method | Path | Body / query | Returns |
@@ -212,7 +235,7 @@ Every change below is written to `audit_log` (who, what, IP, device).
 | POST | `/admin/admins/{user_id}/password` | `{ password }` | 204 |
 | POST | `/admin/admins/{user_id}/deactivate` | – | the account; bans the login. Super Admins and yourself can't be deactivated |
 | POST | `/admin/admins/{user_id}/reactivate` | – | the account |
-| PUT | `/admin/settings/store` / `policies` / `regional` / `security` | that section's fields | the saved section |
+| PUT | `/admin/settings/store` / `policies` / `regional` / `security` / `delivery` | that section's fields | the saved section. `delivery` = `{ store_lat, store_lng, max_km, vehicles: [{ name, length_cm, width_cm, height_cm, max_kg, base, per_km, tier_km?, per_km_after?, included_km }] }`, the Lalamove rate card (saved smallest vehicle first) |
 | POST | `/admin/settings/force-logout` | – | every admin login from before now gets 401, including yours |
 | GET | `/admin/audit-logs` | `admin` (user_id), `action` (`products` / `orders` / `reviews` / `admins` / `settings`), `page`, `page_size` | `{ total, rows }` |
 

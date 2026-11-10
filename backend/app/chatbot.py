@@ -6,7 +6,7 @@ Store details come from the Settings page (store_setting), so the answers stay r
 import re
 
 from . import queries
-from .config import COURIERS, DELIVERY_FEE
+from .config import COURIER
 
 # the buttons under the chat; each one is sent as a message, so its text has to match a topic below
 SUGGESTIONS = ["Shipping & delivery", "Payment methods", "Track my order", "Returns & refunds", "Store hours & location", "Talk to staff"]
@@ -22,9 +22,9 @@ def peso(n) -> str:
 def shipping(db, user):
     free = queries.setting(db, "policies").get("free_shipping_threshold") or 0
     text = (
-        f"We deliver through {', '.join(COURIERS[:-1])} and {COURIERS[-1]} (you pick at checkout). "
-        f"Standard delivery is {peso(DELIVERY_FEE)}, and store pickup is free. "
-        "Orders usually arrive 3–5 days after they ship."
+        f"We deliver through {COURIER}. The fee depends on how far you are from our store in Intramuros and the vehicle "
+        "your items need (a motorcycle for small items, a van or truck for furniture); you'll see the exact amount at checkout "
+        "before you place the order. Store pickup is free. Orders usually arrive 3–5 days after they ship."
     )
     if free:
         text += f" Delivery is free on orders of {peso(free)} or more."
@@ -43,6 +43,7 @@ STATUS_TEXT = {
     "Shipped": "is on the way",
     "Delivered": "was delivered",
     "Cancelled": "was cancelled",
+    "Returned": "was returned to the store after the rider couldn't deliver it",
 }
 
 

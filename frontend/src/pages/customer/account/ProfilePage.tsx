@@ -38,7 +38,9 @@ export default function ProfilePage() {
 
     setSaving(true);
     try {
-      updateUser(await userService.updateProfile({ ...contactPatch(form), birthdate: birthdate || null }));
+      // a new address makes the old map pin wrong, so it's cleared; checkout asks for a new one
+      const movedHouse = form.st_add.trim() !== (user.st_add ?? '') || form.city_id !== (user.city_id ? String(user.city_id) : '');
+      updateUser(await userService.updateProfile({ ...contactPatch(form), birthdate: birthdate || null, ...(movedHouse ? { lat: null, lng: null } : {}) }));
       toast.success('Your profile was saved.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not save your profile');

@@ -62,6 +62,11 @@ export function canPayGcash(order: PaymentFields) {
   );
 }
 
+// the rider marked it delivered and the customer hasn't said yet whether they got it
+export function awaitingReceipt(order: Pick<OrderWithItems, 'order_stat' | 'delivered_by' | 'receipt_confirmed_at' | 'not_received_at'>) {
+  return order.order_stat === 'Delivered' && order.delivered_by === 'rider' && !order.receipt_confirmed_at && !order.not_received_at;
+}
+
 // There's no courier GPS, so the rider's spot on the map is estimated from the order status and how long ago it was placed.
 // Shipped orders move from 10% to 90% of the route over the fastest delivery estimate.
 export function deliveryProgress(order: OrderWithItems, now = Date.now()) {
