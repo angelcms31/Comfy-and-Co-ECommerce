@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { AlertTriangle, ChevronDown, Download, FileSpreadsheet, FileText, MapPin, PackageX, Printer } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { AlertTriangle, ChevronDown, ChevronRight, Download, FileSpreadsheet, FileText, MapPin, PackageX, Printer, QrCode } from 'lucide-react';
 import Button, { buttonClass, ButtonLink } from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Dropdown from '@/components/ui/Dropdown';
@@ -21,7 +21,7 @@ import { formatDateTime } from '@/lib/dates';
 import { parseImages } from '@/lib/images';
 import { downloadPdf, downloadStamp, type SavedPdf } from '@/lib/pdf';
 import { formatPeso } from '@/lib/pricing';
-import { parseShipping, paymentLabel } from '@/lib/tracking';
+import { awaitingReceipt, parseShipping, paymentLabel } from '@/lib/tracking';
 import type { OrderStat, RefundStat } from '@/types/db';
 import type { OrderWithItems } from '@/types/models';
 import AdminPageHeader from './AdminPageHeader';
@@ -31,6 +31,8 @@ import { FilterPills, SearchBox, StatCard, TodayChip } from './AdminUi';
 const PAGE_SIZE = 8;
 const STATUSES: OrderStat[] = ['Pending', 'Shipped', 'Delivered', 'Cancelled', 'Returned'];
 const FINAL: OrderStat[] = ['Cancelled', 'Returned']; // can't be changed again, and the stock went back
+// the one small pill in the Action column: whatever moves the order forward
+const NEXT_STEP = 'h-7 gap-1 whitespace-nowrap px-3 text-xs font-semibold';
 
 const SELECT_STYLE: Record<OrderStat, string> = {
   Pending: 'bg-pending text-pending-text',
@@ -112,6 +114,9 @@ function OrderDetails({
 }) {
   if (!order) return null;
   const { pickup, courier, address, cancelReason } = parseShipping(order.shipping_add);
+  // a delivery order is shipped from the receipt page (QR printed first); a pickup order is marked ready here
+  const paid = order.payment_method !== 'GCash' || order._temp_payment_status === 'Paid';
+  const canShip = order.order_stat === 'Pending' && paid;
   return (
     <Modal open onClose={onClose} title={`Order #${order.order_num}`} size="md">
       <div className="space-y-4 text-sm">
@@ -254,11 +259,16 @@ function OrderDetails({
             <p className="mt-1 text-xs">Check the rider's photos above and contact the customer.</p>
           </div>
         )}
-        {order.order_stat === 'Shipped' && !pickup && order.delivery_token && (
+        {!pickup && (canShip || order.order_stat === 'Shipped') && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-cream p-3">
-            <p className="text-ink">Print the receipt and tape it to the package. The rider scans its QR code at the door.</p>
-            <ButtonLink to={`/admin/orders/${order.order_id}/receipt`} size="sm">
-              <Printer className="size-4" /> Print receipt
+            <p className="text-ink">
+              {order.order_stat === 'Pending'
+                ? 'Print the QR receipt and tape it to the package. The order is marked Shipped from the receipt page, after printing.'
+                : 'Receipt printed and on the package. The rider scans its QR code at the door.'}
+            </p>
+            <ButtonLink to={`/admin/orders/${order.order_id}/receipt`} size="sm" variant={order.order_stat === 'Pending' ? undefined : 'outline'}>
+              {order.order_stat === 'Pending' ? <QrCode className="size-4" /> : <Printer className="size-4" />}
+              {order.order_stat === 'Pending' ? 'Print QR receipt' : 'Print again'}
             </ButtonLink>
           </div>
         )}
@@ -277,11 +287,11 @@ function OrderDetails({
             </div>
           </div>
         )}
-        {order.payment_method === 'GCash' && order._temp_payment_status === 'Paid' && order.order_stat === 'Pending' && (
+        {order.payment_method === 'GCash' && order._temp_payment_status === 'Paid' && order.order_stat === 'Pending' && pickup && (
           <div className="rounded-xl bg-mint p-3 text-forest">
-            <p className="font-medium">Payment confirmed. This order is ready to {pickup ? 'pick up' : 'ship'}.</p>
+            <p className="font-medium">Payment confirmed. This order is ready to pick up.</p>
             <Button size="sm" className="mt-3" loading={saving} onClick={() => onShip(order)}>
-              {pickup ? 'Mark as ready for pickup' : 'Mark as shipped'}
+              Mark as ready for pickup
             </Button>
           </div>
         )}
@@ -293,6 +303,7 @@ function OrderDetails({
 export default function OrdersPage() {
   const toast = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [savedPdf, setSavedPdf] = useState<SavedPdf | null>(null); // "Open PDF?" after an export
   const closePdf = () => {
     if (savedPdf) URL.revokeObjectURL(savedPdf.url);
@@ -380,7 +391,11 @@ export default function OrdersPage() {
   const changeStatus = (order: OrderWithItems, status: OrderStat) => {
     if (status === order.order_stat) return;
     if (FINAL.includes(status)) setCancelling({ order, status });
-    else saveStatus(order, status);
+    else if (status === 'Shipped' && order.order_stat === 'Pending' && !parseShipping(order.shipping_add).pickup) {
+      // a delivery order ships from the receipt page: the QR receipt is printed first, then it's marked Shipped there
+      toast.info(`Print the QR receipt for #${order.order_num} first`);
+      navigate(`/admin/orders/${order.order_id}/receipt`);
+    } else saveStatus(order, status);
   };
 
   const columns: Column<OrderWithItems>[] = [
@@ -396,11 +411,6 @@ export default function OrdersPage() {
             <button onClick={() => setViewing(o)} className="inline-flex items-center gap-1 rounded-full bg-cancelled px-2 py-0.5 text-[11px] font-semibold text-cancelled-text" title="The customer reported this order as not received">
               <AlertTriangle className="size-3" /> Not received
             </button>
-          )}
-          {o._temp_payment_status === 'For verification' && o.order_stat === 'Pending' && (
-            <Button size="sm" onClick={() => setViewing(o)}>
-              Check payment
-            </Button>
           )}
         </span>
       ),
@@ -429,6 +439,43 @@ export default function OrdersPage() {
           ))}
         </select>
       ),
+    },
+    {
+      key: 'next',
+      header: 'Action',
+      className: 'whitespace-nowrap',
+      render: (o) => {
+        const busy = saving === o.order_id;
+        const { pickup } = parseShipping(o.shipping_add);
+        if (o.order_stat === 'Pending') {
+          if (o._temp_payment_status === 'For verification')
+            return (
+              <Button size="sm" variant="secondary" className={NEXT_STEP} disabled={busy} onClick={() => setViewing(o)}>
+                Check payment <ChevronRight className="size-3.5" />
+              </Button>
+            );
+          if (o.payment_method === 'GCash' && o._temp_payment_status !== 'Paid') return <span className="text-xs text-muted">Waiting for payment</span>;
+          if (pickup)
+            return (
+              <Button size="sm" variant="secondary" className={NEXT_STEP} loading={busy} onClick={() => saveStatus(o, 'Shipped')}>
+                Ready for pickup <ChevronRight className="size-3.5" />
+              </Button>
+            );
+          return (
+            <ButtonLink to={`/admin/orders/${o.order_id}/receipt`} size="sm" variant="secondary" className={NEXT_STEP}>
+              <QrCode className="size-3.5" /> Print QR <ChevronRight className="size-3.5" />
+            </ButtonLink>
+          );
+        }
+        if (o.order_stat === 'Shipped')
+          return (
+            <Button size="sm" variant="secondary" className={NEXT_STEP} loading={busy} onClick={() => saveStatus(o, 'Delivered')} title={pickup ? undefined : 'The rider does this by scanning the QR code; use this if they could not'}>
+              {pickup ? 'Picked up' : 'Delivered'} <ChevronRight className="size-3.5" />
+            </Button>
+          );
+        if (awaitingReceipt(o)) return <span className="text-xs text-muted">Waiting for customer</span>;
+        return <span className="text-muted">–</span>;
+      },
     },
     {
       key: 'refund',
@@ -537,7 +584,13 @@ export default function OrdersPage() {
         )}
       </section>
 
-      <OrderDetails order={viewing} onClose={() => setViewing(null)} onPayment={savePayment} onShip={(o) => saveStatus(o, 'Shipped')} saving={saving === viewing?.order_id} />
+      <OrderDetails
+        order={viewing}
+        onClose={() => setViewing(null)}
+        onPayment={savePayment}
+        onShip={(o) => saveStatus(o, 'Shipped')}
+        saving={saving === viewing?.order_id}
+      />
       <ConfirmDialog
         open={!!cancelling}
         title={cancelling?.status === 'Returned' ? 'Mark this order as returned?' : 'Cancel this order?'}
