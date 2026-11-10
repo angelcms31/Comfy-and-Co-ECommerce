@@ -203,7 +203,6 @@ class RefundIn(BaseModel):
     reason: str = Field(min_length=1, max_length=100)
     details: str | None = Field(default=None, max_length=1000)
     photos: list[str] = Field(default_factory=list, max_length=3)
-    is_anonymous: bool = False
 
 
 class RefundStatusIn(BaseModel):
@@ -248,6 +247,7 @@ class ReviewIn(BaseModel):
     rating: int = Field(ge=1, le=5)
     content: str = Field(min_length=1, max_length=2000)
     photos: list[str] = Field(default_factory=list, max_length=3)
+    is_anonymous: bool = False  # the store page shows "Anonymous", admins still see the name
 
 
 class ReviewFlagsIn(BaseModel):
