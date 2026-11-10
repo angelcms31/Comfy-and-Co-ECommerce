@@ -29,7 +29,7 @@ def admin_or_404(db, user_id: str) -> dict:
         """
         select u.user_id, u.full_name, u.email, r.user_role as role, u.deactivated_at, u.date_added
         from "user" u join user_role r on r.user_role_id = u.user_role_id
-        where u.user_id = %s and r.user_role = any(%s) and u.deleted_at is null and u.deleted_at is null and u.deleted_at is null
+        where u.user_id = %s and r.user_role = any(%s) and u.deleted_at is null
         """,
         (user_id, list(ADMIN_ROLES)),
     ).fetchone()
@@ -41,6 +41,12 @@ def admin_or_404(db, user_id: str) -> dict:
 def check_not_self(target: dict, me: dict, what: str):
     if str(target["user_id"]) == str(me["user_id"]):
         raise HTTPException(400, f"You can't {what} your own account")
+
+
+def check_not_super_admin(role: str):
+    # the store has exactly one Super Admin, so no one else can be given that role
+    if role == "super_admin":
+        raise HTTPException(400, "There can only be one Super Admin. Pick the Admin role instead")
 
 
 def role_id(db, role: str) -> int:
@@ -65,6 +71,7 @@ def list_admins(db: Db):
 
 @router.post("")
 def add_admin(db: Db, request: Request, body: AdminIn, me=Depends(require_super_admin)):
+    check_not_super_admin(body.role)
     email = body.email.strip().lower()
     if db.execute('select 1 from "user" where lower(email) = %s', (email,)).fetchone():
         raise HTTPException(400, "An account with this email already exists")
@@ -91,6 +98,7 @@ def add_admin(db: Db, request: Request, body: AdminIn, me=Depends(require_super_
 def change_role(db: Db, request: Request, user_id: str, body: AdminRoleIn, me=Depends(require_super_admin)):
     target = admin_or_404(db, user_id)
     check_not_self(target, me, "change the role of")
+    check_not_super_admin(body.role)
     db.execute('update "user" set user_role_id = %s where user_id = %s', (role_id(db, body.role), user_id))
     audit.log(db, request, me, f"Changed role of {target['full_name']} to {ROLE_LABEL[body.role]}")
     return admin_or_404(db, user_id)

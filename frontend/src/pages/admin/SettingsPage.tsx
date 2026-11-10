@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KeyRound, Lock, Plus, RotateCcw, UserCog, UserX, Download } from 'lucide-react';
+import { KeyRound, Lock, Plus, RotateCcw, UserX, Download } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Input, { Select } from '@/components/ui/Input';
@@ -18,6 +18,7 @@ import { cn } from '@/lib/cn';
 import { formatDate, formatDateTime } from '@/lib/dates';
 import { ACCOUNT_DELETE_DAYS } from '@/lib/constants';
 import { ROLE_LABEL } from '@/lib/roles';
+import { emailError } from '@/lib/email';
 import { downloadCsv } from '@/lib/csv';
 import { isValidName, NAME_ERROR } from '@/lib/names';
 import type { AdminAccount, AdminRoleName, AllSettings, AuditAction, AuditLogRow, NewAdminInput } from '@/types/admin';
@@ -133,10 +134,12 @@ function AddAdminModal({ open, onClose, onAdded }: { open: boolean; onClose: () 
   const [form, setForm] = useState(empty);
   const [busy, setBusy] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [mailError, setMailError] = useState<string | null>(null);
   useEffect(() => {
     if (open) {
       setForm(empty);
       setNameError(null);
+      setMailError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -144,8 +147,10 @@ function AddAdminModal({ open, onClose, onAdded }: { open: boolean; onClose: () 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const bad = !isValidName(form.full_name);
+    const badMail = emailError(form.email);
     setNameError(bad ? NAME_ERROR : null);
-    if (bad) return;
+    setMailError(badMail);
+    if (bad || badMail) return;
     setBusy(true);
     try {
       await adminService.addAdmin({ ...form, full_name: form.full_name.trim(), email: form.email.trim() });
@@ -177,7 +182,7 @@ function AddAdminModal({ open, onClose, onAdded }: { open: boolean; onClose: () 
     >
       <form id="add-admin" onSubmit={onSubmit} className="space-y-3">
         <Input label="Full name" required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} error={nameError} />
-        <Input label="Email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <Input label="Email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} error={mailError} />
         <PasswordInput
           label="Temporary password"
           required
@@ -186,10 +191,9 @@ function AddAdminModal({ open, onClose, onAdded }: { open: boolean; onClose: () 
           onChange={(e) => setForm({ ...form, password: e.target.value })}
         />
         <p className="-mt-2 text-xs text-muted">At least 8 characters. Share it with them privately.</p>
-        <Select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as AdminRoleName })}>
-          <option value="admin">Admin (daily operations)</option>
-          <option value="super_admin">Super Admin (full access)</option>
-        </Select>
+        <p className="rounded-lg bg-cream px-3 py-2 text-xs text-muted">
+          New accounts get the <span className="font-semibold text-forest">Admin</span> role (daily operations). There is only one Super Admin.
+        </p>
       </form>
     </Modal>
   );
@@ -202,8 +206,6 @@ function UserManagement({ settings, addOpen, setAddOpen, onViewLogs }: { setting
   const activity = useAsync(() => adminService.getAuditLogs({ pageSize: 3 }), []);
   const security = useSecurityActions(settings);
   const [filter, setFilter] = useState<'all' | 'active' | 'deactivated'>('all');
-  const [editingRole, setEditingRole] = useState<AdminAccount | null>(null);
-  const [newRole, setNewRole] = useState<AdminRoleName>('admin');
   const [resetting, setResetting] = useState<AdminAccount | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [deactivating, setDeactivating] = useState<AdminAccount | null>(null);
@@ -219,7 +221,6 @@ function UserManagement({ settings, addOpen, setAddOpen, onViewLogs }: { setting
     try {
       await action();
       toast.success(done);
-      setEditingRole(null);
       setResetting(null);
       setDeactivating(null);
       admins.reload();
@@ -280,17 +281,6 @@ function UserManagement({ settings, addOpen, setAddOpen, onViewLogs }: { setting
           );
         return (
           <span className="flex items-center gap-1">
-            <button
-              onClick={() => {
-                setNewRole(a.role);
-                setEditingRole(a);
-              }}
-              title="Edit role"
-              aria-label={`Edit role of ${a.full_name}`}
-              className={cn(iconBtn, 'text-ink hover:bg-cream')}
-            >
-              <UserCog className="size-4" />
-            </button>
             <button
               onClick={() => {
                 setNewPassword('');
@@ -388,28 +378,6 @@ function UserManagement({ settings, addOpen, setAddOpen, onViewLogs }: { setting
       />
 
       <Modal
-        open={!!editingRole}
-        onClose={() => !busy && setEditingRole(null)}
-        title={`Edit role of ${editingRole?.full_name ?? ''}`}
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setEditingRole(null)} disabled={busy}>
-              Cancel
-            </Button>
-            <Button loading={busy} onClick={() => editingRole && run(() => adminService.changeRole(editingRole.user_id, newRole), 'Role updated')}>
-              Save role
-            </Button>
-          </>
-        }
-      >
-        <Select label="Role" value={newRole} onChange={(e) => setNewRole(e.target.value as AdminRoleName)}>
-          <option value="admin">Admin (daily operations)</option>
-          <option value="super_admin">Super Admin (full access)</option>
-        </Select>
-      </Modal>
-
-      <Modal
         open={!!resetting}
         onClose={() => !busy && setResetting(null)}
         title={`Reset password of ${resetting?.full_name ?? ''}`}
@@ -469,6 +437,8 @@ function StoreInfo({ settings }: { settings: ReturnType<typeof useAsync<AllSetti
     setForm((f) => f && { ...f, [section]: { ...f[section], [field]: e.target.value } });
 
   const saveAll = async () => {
+    const badMail = emailError(form.store.support_email);
+    if (badMail) return toast.error(`Support email: ${badMail}`);
     setBusy(true);
     try {
       await adminService.saveStore(form.store);
@@ -496,7 +466,7 @@ function StoreInfo({ settings }: { settings: ReturnType<typeof useAsync<AllSetti
               <p className="mt-1 text-[11px] text-muted">To change it, replace frontend/public/logo.png</p>
             </div>
             <Input label="Store Name" value={form.store.name} onChange={set('store', 'name')} />
-            <Input label="Support Email" type="email" value={form.store.support_email} onChange={set('store', 'support_email')} />
+            <Input label="Support Email" type="email" maxLength={100} value={form.store.support_email} onChange={set('store', 'support_email')} />
             <Input label="Contact Number" value={form.store.phone} onChange={set('store', 'phone')} />
             <Input label="Store Address" value={form.store.address} onChange={set('store', 'address')} />
             <Input label="Store Hours" value={form.store.hours} onChange={set('store', 'hours')} />
@@ -567,6 +537,7 @@ const ACTIONS: { value: AuditAction | ''; label: string }[] = [
   { value: 'reviews', label: 'Reviews' },
   { value: 'admins', label: 'Admin accounts' },
   { value: 'settings', label: 'Settings' },
+  { value: 'inventory', label: 'Suppliers' },
 ];
 
 function SecurityLogs({ settings }: { settings: ReturnType<typeof useAsync<AllSettings>> }) {
