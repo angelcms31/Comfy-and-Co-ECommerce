@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, PackageX } from 'lucide-react';
-import Button from '@/components/ui/Button';
+import { ChevronDown, Download, FileSpreadsheet, FileText, PackageX } from 'lucide-react';
+import Button, { buttonClass } from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import Dropdown from '@/components/ui/Dropdown';
+import { Select } from '@/components/ui/Input';
+import { useAuth } from '@/context/AuthContext';
 import Modal from '@/components/ui/Modal';
 import Pagination from '@/components/ui/Pagination';
 import StatusPill from '@/components/ui/StatusPill';
@@ -15,6 +18,7 @@ import { cn } from '@/lib/cn';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateTime } from '@/lib/dates';
 import { parseImages } from '@/lib/images';
+import { downloadPdf, downloadStamp, type SavedPdf } from '@/lib/pdf';
 import { formatPeso } from '@/lib/pricing';
 import { parseShipping, paymentLabel } from '@/lib/tracking';
 import type { OrderStat, RefundStat } from '@/types/db';
@@ -50,21 +54,39 @@ const REFUND_STYLE: Record<RefundStat, string> = {
 
 type Tab = OrderStat | 'all' | 'refund';
 
-// the orders that are showing, as a spreadsheet file
-function exportCsv(orders: OrderWithItems[]) {
+const EXPORT_COLUMNS = ['Order #', 'Customer', 'Items', 'Total', 'Payment', 'Status', 'Placed', 'Ship to'];
+const exportRow = (o: OrderWithItems, total: string | number) => [
+  o.order_num,
+  o.customer_name,
+  o.items.map((i) => `${i.item_name} x${i.quantity}`).join('; '),
+  total,
+  o.payment_method,
+  o.order_stat,
+  formatDateTime(o.placed_at),
+  parseShipping(o.shipping_add).address,
+];
+const filterLabel = (tab: Tab) => (tab === 'all' ? 'All orders' : tab === 'refund' ? 'Refund requests' : `${tab} orders`);
+
+// the orders that are showing, as a spreadsheet file; who downloaded it and when goes at the bottom
+function exportCsv(orders: OrderWithItems[], tab: Tab, by: string | null | undefined) {
   downloadCsv('comfyco-orders', [
-    ['Order #', 'Customer', 'Items', 'Total', 'Payment', 'Status', 'Placed', 'Ship to'],
-    ...orders.map((o) => [
-      o.order_num,
-      o.customer_name,
-      o.items.map((i) => `${i.item_name} x${i.quantity}`).join('; '),
-      o.total_amt,
-      o.payment_method,
-      o.order_stat,
-      formatDateTime(o.placed_at),
-      parseShipping(o.shipping_add).address,
-    ]),
+    EXPORT_COLUMNS,
+    ...orders.map((o) => exportRow(o, o.total_amt)),
+    [],
+    [`${filterLabel(tab)}: ${orders.length}`],
+    [downloadStamp(by)],
   ]);
+}
+
+// the same list as a PDF report (amounts written as PHP, the PDF font has no ₱)
+function exportPdf(orders: OrderWithItems[], tab: Tab, by: string | null | undefined) {
+  return downloadPdf('comfyco-orders', {
+    title: 'Orders',
+    subtitle: `${filterLabel(tab)} · ${orders.length} ${orders.length === 1 ? 'order' : 'orders'}`,
+    by,
+    columns: EXPORT_COLUMNS,
+    rows: orders.map((o) => exportRow(o, `PHP ${Number(o.total_amt).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`)),
+  });
 }
 
 function OrderDetails({
@@ -182,6 +204,12 @@ function OrderDetails({
 
 export default function OrdersPage() {
   const toast = useToast();
+  const { user } = useAuth();
+  const [savedPdf, setSavedPdf] = useState<SavedPdf | null>(null); // "Open PDF?" after an export
+  const closePdf = () => {
+    if (savedPdf) URL.revokeObjectURL(savedPdf.url);
+    setSavedPdf(null);
+  };
   const orders = useAsync(() => orderService.getAll(), []);
   const [tab, setTab] = useState<Tab>('all');
   const [search, setSearch] = useState('');
@@ -344,18 +372,53 @@ export default function OrdersPage() {
       <section className="rounded-card border border-line bg-white p-3 sm:p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <SearchBox value={search} onChange={setSearch} placeholder="Search Order # or Customer..." className="w-full sm:w-64" />
-          <FilterPills
-            value={tab}
-            onChange={setTab}
-            options={[
-              { value: 'all' as const, label: 'All' },
-              ...STATUSES.map((s) => ({ value: s as Tab, label: s })),
-              { value: 'refund' as const, label: refundRequests ? `Refunds (${refundRequests})` : 'Refunds' },
-            ]}
-          />
-          <Button variant="outline" size="sm" className="sm:ml-auto" onClick={() => exportCsv(rows)} disabled={!rows.length}>
-            <Download className="size-4" /> Export CSV
-          </Button>
+          {/* All stays a button; the statuses are in one dropdown so Export fits on the same line */}
+          <FilterPills value={tab === 'all' ? 'all' : ''} onChange={() => setTab('all')} options={[{ value: 'all', label: 'All' }]} />
+          <div className="w-44">
+            <Select aria-label="Filter by status" value={tab === 'all' ? '' : tab} onChange={(e) => setTab((e.target.value || 'all') as Tab)} className={cn('h-9 rounded-full !py-0 text-sm', tab !== 'all' && 'border-forest bg-mint-light font-medium text-forest')}>
+              <option value="">Filter by status</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+              <option value="refund">{refundRequests ? `Refunds (${refundRequests})` : 'Refunds'}</option>
+            </Select>
+          </div>
+          <Dropdown
+            className="sm:ml-auto"
+            align="right"
+            ariaLabel="Export the orders showing"
+            buttonClassName={buttonClass('outline', 'sm', !rows.length ? 'pointer-events-none opacity-50' : undefined)}
+            label={
+              <>
+                <Download className="size-4" /> Export <ChevronDown className="size-3.5" />
+              </>
+            }
+          >
+            {(close) => (
+              <>
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-cream"
+                  onClick={() => {
+                    exportCsv(rows, tab, user?.full_name);
+                    close();
+                  }}
+                >
+                  <FileSpreadsheet className="size-4 text-forest" /> Spreadsheet (CSV)
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-cream"
+                  onClick={() => {
+                    setSavedPdf(exportPdf(rows, tab, user?.full_name));
+                    close();
+                  }}
+                >
+                  <FileText className="size-4 text-forest" /> PDF report
+                </button>
+              </>
+            )}
+          </Dropdown>
         </div>
 
         {orders.loading && <LoadingState label="Loading orders..." layout="table" />}
@@ -384,6 +447,22 @@ export default function OrdersPage() {
           <>
             Order <strong className="text-ink">#{cancelling?.order_num}</strong> will be cancelled and its stock put back. A cancelled order can't be
             reopened.
+          </>
+        }
+      />
+      {/* the PDF is already saved; this just offers to open it right away */}
+      <ConfirmDialog
+        open={!!savedPdf}
+        title="PDF downloaded"
+        confirmLabel="Open PDF"
+        onCancel={closePdf}
+        onConfirm={() => {
+          if (savedPdf) window.open(savedPdf.url, '_blank', 'noopener');
+          closePdf();
+        }}
+        message={
+          <>
+            <strong className="text-ink">{savedPdf?.filename}</strong> is in your Downloads folder. Open it now?
           </>
         }
       />
