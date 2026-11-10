@@ -14,7 +14,14 @@ import type { OrderWithItems } from '@/types/models';
 import AdminPageHeader from './AdminPageHeader';
 import OrderItemsCell from './OrderItemsCell';
 import { Card, StatCard, TodayChip } from './AdminUi';
-import SalesChart, { ChartLegend } from './SalesChart';
+import SalesChart, { ChartLegend, ForecastSummary } from './SalesChart';
+
+const RANGES: { value: SalesRange; label: string; unit: 'day' | 'week' | 'month' }[] = [
+  { value: '7d', label: 'Last 7 Days', unit: 'day' },
+  { value: '30d', label: 'Last 30 Days', unit: 'week' },
+  { value: '12m', label: 'Monthly (12 months)', unit: 'month' },
+  { value: '24m', label: 'Long Term (2 years)', unit: 'month' },
+];
 
 const columns: Column<OrderWithItems>[] = [
   { key: 'num', header: 'Order #', render: (o) => <span className="font-medium">#{o.order_num}</span> },
@@ -58,10 +65,13 @@ export default function DashboardPage() {
             title={
               <span className="flex flex-wrap items-center gap-3">
                 Sales
-                <span className="w-36 font-sans text-sm font-normal">
+                <span className="w-48 font-sans text-sm font-normal">
                   <Select aria-label="Sales range" value={range} onChange={(e) => setRange(e.target.value as SalesRange)} className="h-9 !py-0">
-                    <option value="7d">Last 7 Days</option>
-                    <option value="30d">Last 30 Days</option>
+                    {RANGES.map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
                   </Select>
                 </span>
               </span>
@@ -69,6 +79,7 @@ export default function DashboardPage() {
             actions={<ChartLegend />}
           >
             <SalesChart data={summary.data.chart} />
+            <ForecastSummary data={summary.data.chart} unit={RANGES.find((r) => r.value === range)?.unit ?? 'day'} />
           </Card>
 
           <Card

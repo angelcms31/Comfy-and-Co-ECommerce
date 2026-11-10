@@ -2,7 +2,8 @@
 import type { UserRoleName } from './db';
 import type { OrderWithItems } from './models';
 
-export type SalesRange = '7d' | '30d';
+// 7d: days + 1 day forecast, 30d: weeks + 1 week, 12m: months + 6 months, 24m (long term): months + 12 months
+export type SalesRange = '7d' | '30d' | '12m' | '24m';
 
 export interface DashboardSummary {
   salesToday: number;
@@ -10,8 +11,9 @@ export interface DashboardSummary {
   lowStockCount: number;
   avgRating: number;
   reviewCount: number;
-  // the last bar is the forecast (straight-line trend of the actual bars)
-  chart: { label: string; total: number; forecast: boolean }[];
+  // actual bars, then the forecast bars (straight-line trend of the actual bars).
+  // monthly ranges: the current month is `partial` (month to date) and `expected` is the trend's figure for it
+  chart: { label: string; total: number; forecast: boolean; partial?: boolean; expected?: number }[];
   recentOrders: OrderWithItems[];
 }
 

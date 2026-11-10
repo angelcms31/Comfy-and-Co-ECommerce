@@ -1,5 +1,5 @@
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
@@ -18,20 +18,28 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(requir
 
 # ---------- dashboard ----------
 
-def forecast_next(values: list[float]) -> float:
-    # straight line through the actual sales (least squares), continued one step. Never below zero.
+def forecast(values: list[float], steps: int = 1) -> list[float]:
+    # straight line through the actual sales (least squares), continued `steps` periods. Never below zero.
     n = len(values)
     if n < 2:
-        return values[0] if values else 0
+        return [round(values[0], 2) if values else 0.0] * steps
     mean_x, mean_y = (n - 1) / 2, sum(values) / n
     slope_den = sum((i - mean_x) ** 2 for i in range(n))
     slope = sum((i - mean_x) * (v - mean_y) for i, v in enumerate(values)) / slope_den
-    return max(0.0, round(mean_y + slope * (n - mean_x), 2))
+    return [max(0.0, round(mean_y + slope * (n + k - mean_x), 2)) for k in range(steps)]
 
 
-@router.get("/dashboard")
-def dashboard(db: Db, period: Literal["7d", "30d"] = Query("7d", alias="range")):
-    day = today()
+def add_months(d: date, n: int) -> date:
+    # first day of the month n months away from d
+    m = d.year * 12 + d.month - 1 + n
+    return date(m // 12, m % 12 + 1, 1)
+
+
+# range -> (past months shown, months forecast)
+MONTH_RANGES = {"12m": (12, 6), "24m": (24, 12)}
+
+
+def daily_chart(db, period: str, day: date) -> tuple[list[dict], float]:
     days = 7 if period == "7d" else 28
     start = day - timedelta(days=days - 1)
 
@@ -59,7 +67,55 @@ def dashboard(db: Db, period: Literal["7d", "30d"] = Query("7d", alias="range"))
         next_label = "Week 5"
 
     chart = [{"label": label, "total": total, "forecast": False} for label, total in zip(labels, actual)]
-    chart.append({"label": next_label, "total": forecast_next(actual), "forecast": True})
+    chart.append({"label": next_label, "total": forecast(actual)[0], "forecast": True})
+    return chart, by_day.get(day, 0)
+
+
+def monthly_chart(db, period: str, day: date) -> list[dict]:
+    past, ahead = MONTH_RANGES[period]
+    this_month = day.replace(day=1)
+    start = add_months(this_month, -(past - 1))
+
+    rows = db.execute(
+        """
+        select date_trunc('month', placed_at at time zone %s)::date as month, sum(total_amt) as total
+        from "order"
+        where order_stat <> 'Cancelled' and (placed_at at time zone %s)::date >= %s
+        group by 1
+        """,
+        (TIMEZONE, TIMEZONE, start),
+    ).fetchall()
+    by_month = {r["month"]: float(r["total"]) for r in rows}
+    months = [add_months(start, i) for i in range(past)]
+    actual = [by_month.get(m, 0.0) for m in months]
+
+    # fit the trend on finished months only (this month is still running), and skip the
+    # empty months before the first sale so they don't drag the line down
+    done = actual[:-1]
+    first = next((i for i, v in enumerate(done) if v), len(done))
+    fit = done[first:]
+    # this month gets a forecast too, so the line continues from the last finished month
+    projected = forecast(fit, ahead + 1)
+
+    label = lambda m: m.strftime("%b '%y")
+    chart = [{"label": label(m), "total": v, "forecast": False} for m, v in zip(months, actual)]
+    chart[-1]["partial"] = True
+    chart[-1]["expected"] = projected[0]
+    chart += [
+        {"label": label(add_months(this_month, k + 1)), "total": v, "forecast": True}
+        for k, v in enumerate(projected[1:])
+    ]
+    return chart
+
+
+@router.get("/dashboard")
+def dashboard(db: Db, period: Literal["7d", "30d", "12m", "24m"] = Query("7d", alias="range")):
+    day = today()
+    if period in MONTH_RANGES:
+        chart = monthly_chart(db, period, day)
+        _, sales_today = daily_chart(db, "7d", day)
+    else:
+        chart, sales_today = daily_chart(db, period, day)
 
     counts = db.execute(
         """
@@ -73,7 +129,7 @@ def dashboard(db: Db, period: Literal["7d", "30d"] = Query("7d", alias="range"))
     ).fetchone()
 
     return {
-        "salesToday": by_day.get(day, 0),
+        "salesToday": sales_today,
         "ordersToday": counts["orders_today"],
         "lowStockCount": counts["low_stock"],
         "avgRating": float(counts["avg_rating"] or 0),
