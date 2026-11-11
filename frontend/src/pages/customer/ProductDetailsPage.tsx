@@ -8,7 +8,9 @@ import QuantityStepper from '@/components/ui/QuantityStepper';
 import { ErrorState, LoadingState } from '@/components/ui/States';
 import ProductReviews from '@/features/reviews/components/ProductReviews';
 import { useAsync } from '@/hooks/useAsync';
+import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
+import { useSignInPrompt } from '@/context/SignInPrompt';
 import { useWishlist } from '@/context/WishlistContext';
 import { productService } from '@/services/productService';
 import { parseImages, PLACEHOLDER_IMG } from '@/lib/images';
@@ -158,6 +160,8 @@ export default function ProductDetailsPage() {
   const [params, setParams] = useSearchParams();
   const { data: product, loading, error, reload } = useAsync(() => productService.getById(productId), [productId]);
   const { addItem, lines } = useCart();
+  const { user } = useAuth();
+  const askSignIn = useSignInPrompt();
   const wishlist = useWishlist();
   const navigate = useNavigate();
 
@@ -192,6 +196,20 @@ export default function ProductDetailsPage() {
     setAdding(true);
     await addItem(variant, quantity);
     setAdding(false);
+  };
+
+  // signed in: straight to checkout with just this item. Guest: sign in and land on that checkout, or put it in the cart
+  const buyNow = async () => {
+    const checkout = `/checkout?buy=${variant.prod_var_id}&qty=${quantity}`;
+    if (user) {
+      navigate(checkout);
+      return;
+    }
+    if (!(await askSignIn('buy', checkout))) return;
+    setAdding(true);
+    const added = await addItem(variant, quantity);
+    setAdding(false);
+    if (added || canAdd === 0) navigate('/cart');
   };
 
   return (
@@ -270,7 +288,7 @@ export default function ProductDetailsPage() {
               {buyable ? 'Add to Cart' : 'Out of stock'}
             </Button>
             {buyable && (
-              <Button size="lg" variant="secondary" className="flex-1 sm:flex-none sm:px-10" onClick={() => navigate(`/checkout?buy=${variant.prod_var_id}&qty=${quantity}`)}>
+              <Button size="lg" variant="secondary" className="flex-1 sm:flex-none sm:px-10" onClick={buyNow}>
                 Buy Now
               </Button>
             )}

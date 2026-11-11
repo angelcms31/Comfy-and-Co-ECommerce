@@ -6,7 +6,6 @@ import MoreProducts from '@/components/ui/MoreProducts';
 import PriceTag from '@/components/ui/PriceTag';
 import QuantityStepper from '@/components/ui/QuantityStepper';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
-import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
 import { itemCount, linesTotal, saveCheckoutIds } from '@/lib/checkout';
@@ -20,9 +19,7 @@ const checkbox = 'size-4 shrink-0 rounded accent-forest';
 
 function CartRow({ line, index, checked, onCheck }: { line: CartLine; index: number; checked: boolean; onCheck: (on: boolean) => void }) {
   const { updateQuantity, removeItem } = useCart();
-  const { user } = useAuth();
   const wishlist = useWishlist();
-  const navigate = useNavigate();
   const { variant } = line;
   const link = `/products/${variant.product_id}?variant=${variant.prod_var_id}`;
   const buyable = isBuyable(variant);
@@ -47,7 +44,7 @@ function CartRow({ line, index, checked, onCheck }: { line: CartLine; index: num
         <QuantityStepper size="sm" value={line.quantity} max={Math.max(1, variant.stocks)} onChange={(q) => updateQuantity(line, q)} disabled={!buyable} />
         <div className="flex gap-1">
           <button
-            onClick={() => (user ? wishlist.toggle(variant.prod_var_id) : navigate('/login', { state: { from: '/cart' } }))}
+            onClick={() => wishlist.toggle(variant.prod_var_id)}
             aria-label={liked ? 'Remove from wishlist' : 'Save to wishlist'}
             aria-pressed={liked}
             className={cn('rounded-full p-1.5 hover:bg-mint-light', liked ? 'text-coral-dark' : 'text-forest')}

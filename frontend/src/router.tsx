@@ -1,6 +1,7 @@
 import { createBrowserRouter, Outlet } from 'react-router-dom';
 import { AuthProvider } from '@/context/AuthContext';
 import { CartProvider } from '@/context/CartContext';
+import { SignInPromptProvider } from '@/context/SignInPrompt';
 import { WishlistProvider } from '@/context/WishlistContext';
 import CustomerLayout from '@/components/layout/CustomerLayout';
 import AdminLayout from '@/components/layout/AdminLayout';
@@ -35,15 +36,17 @@ import ReceiptPage from '@/pages/admin/ReceiptPage';
 import DeliverPage from '@/pages/DeliverPage';
 import NotFound from '@/pages/NotFound';
 
-// providers sit inside the router because the wishlist uses navigate()
+// providers sit inside the router because the sign in prompt uses navigate()
 function Root() {
   return (
     <AuthProvider>
-      <CartProvider>
-        <WishlistProvider>
-          <Outlet />
-        </WishlistProvider>
-      </CartProvider>
+      <SignInPromptProvider>
+        <CartProvider>
+          <WishlistProvider>
+            <Outlet />
+          </WishlistProvider>
+        </CartProvider>
+      </SignInPromptProvider>
     </AuthProvider>
   );
 }

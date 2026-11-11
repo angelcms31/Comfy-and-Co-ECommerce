@@ -60,21 +60,8 @@ export default function WishlistPage() {
   const { items, loading, error, reload } = useWishlist();
 
   let content;
-  if (authLoading || (user && loading)) {
+  if (authLoading || loading) {
     content = <LoadingState layout="list" />;
-  } else if (!user) {
-    content = (
-      <EmptyState
-        icon={<Heart className="size-7" />}
-        title="Log in to see your Likes"
-        message="Save the pieces you love and come back to them anytime."
-        action={
-          <ButtonLink to="/login" state={{ from: '/wishlist' }}>
-            Log in
-          </ButtonLink>
-        }
-      />
-    );
   } else if (error) {
     content = <ErrorState message={error} onRetry={reload} />;
   } else if (items.length === 0) {
@@ -99,8 +86,18 @@ export default function WishlistPage() {
   return (
     <div className="container-page max-w-4xl py-8 sm:py-12">
       <h1 className="mb-6 text-3xl font-semibold text-forest sm:text-4xl">
-        Likes {user && items.length > 0 && <span className="text-xl text-muted">({items.length})</span>}
+        Likes {items.length > 0 && <span className="text-xl text-muted">({items.length})</span>}
       </h1>
+      {/* a guest's Likes live in this browser only until they sign in */}
+      {!authLoading && !user && items.length > 0 && (
+        <p className="mb-4 rounded-xl bg-cream px-4 py-3 text-sm text-ink">
+          These Likes are saved in this browser only.{' '}
+          <Link to="/login" state={{ from: '/wishlist' }} className="font-medium text-forest underline-offset-2 hover:underline">
+            Sign in
+          </Link>{' '}
+          to keep them on your account.
+        </p>
+      )}
       {content}
     </div>
   );
