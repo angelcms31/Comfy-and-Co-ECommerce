@@ -121,6 +121,25 @@ export async function geocode(address: string): Promise<LatLng | null> {
   return null;
 }
 
+export interface FoundAddress {
+  street: string; // "12 Malabito Street, San Martin de Porres" (house no., road, barangay), whatever OSM knows
+  city: string; // "Quezon City", "Mandaluyong"
+  postal: string; // "1111", or '' if unknown
+}
+
+// the address at a map point (used after "Use my current location" to fill in the address fields); null if OSM has nothing there
+export async function reverseGeocode([lat, lng]: LatLng): Promise<FoundAddress | null> {
+  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&addressdetails=1&lat=${lat}&lon=${lng}`);
+  if (!res.ok) return null;
+  const { address: a } = (await res.json()) as { address?: Record<string, string> };
+  if (!a || a.country_code !== 'ph') return null;
+  const barangay = a.quarter ?? a.neighbourhood ?? a.village ?? a.suburb ?? '';
+  const street = [[a.house_number, a.road].filter(Boolean).join(' '), barangay].filter(Boolean).join(', ');
+  const city = a.city ?? a.town ?? a.municipality ?? '';
+  if (!street && !city) return null;
+  return { street, city, postal: /^\d{4}$/.test(a.postcode ?? '') ? a.postcode! : '' };
+}
+
 // road route from the free OSRM demo server, falls back to a straight line
 export async function roadRoute(from: LatLng, to: LatLng): Promise<LatLng[]> {
   try {

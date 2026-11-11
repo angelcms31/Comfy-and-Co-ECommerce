@@ -20,12 +20,13 @@ type Props = {
   value: LatLng | null; // the saved pin
   address: string; // the typed address, located on the map when there's no pin yet
   onChange: (point: LatLng | null) => void;
+  onLocate?: (point: LatLng) => void; // "Use my current location" found the phone: the page can fill in the address from it
   disabled?: boolean;
 };
 
 // Map where the customer drops a pin on their house, so the Lalamove rider goes to the right door.
 // Without a pin the typed address is located on the map (often only as far as the street or barangay).
-export default function LocationPicker({ value, address, onChange, disabled }: Props) {
+export default function LocationPicker({ value, address, onChange, onLocate, disabled }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -107,7 +108,9 @@ export default function LocationPicker({ value, address, onChange, disabled }: P
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating(false);
-        onChange([Number(pos.coords.latitude.toFixed(6)), Number(pos.coords.longitude.toFixed(6))]);
+        const point: LatLng = [Number(pos.coords.latitude.toFixed(6)), Number(pos.coords.longitude.toFixed(6))];
+        onChange(point);
+        onLocate?.(point);
       },
       () => {
         setLocating(false);
@@ -134,7 +137,8 @@ export default function LocationPicker({ value, address, onChange, disabled }: P
           )}
         </div>
       </div>
-      <div className="overflow-hidden rounded-xl border border-line">
+      {/* isolate: Leaflet's own z-indexes stay inside the map, under the sticky header (same as DeliveryMap) */}
+      <div className="relative isolate overflow-hidden rounded-xl border border-line">
         <div ref={box} className="h-64 w-full sm:h-72" />
       </div>
       <p className="flex items-start gap-1.5 text-xs text-muted">

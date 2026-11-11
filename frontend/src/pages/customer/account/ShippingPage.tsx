@@ -6,8 +6,9 @@ import { Textarea } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import LocationPicker from '@/components/order/LocationPicker';
 import { useAuth } from '@/context/AuthContext';
+import { locationService } from '@/services/locationService';
 import { userService } from '@/services/userService';
-import type { LatLng } from '@/lib/tracking';
+import { reverseGeocode, type LatLng } from '@/lib/tracking';
 import { AddressFields, contactFromUser, contactPatch, NameMobileFields, validateContact, type ContactErrors, type ContactForm } from './AddressFields';
 
 const MAX_NOTE = 300;
@@ -32,6 +33,30 @@ export default function ShippingPage() {
   // what the map looks for when there's no pin: the city name is known only while it's still the saved one
   const cityName = form.city_id && form.city_id === String(user.city_id ?? '') ? (user.city?.city ?? '') : '';
   const mapAddress = [form.st_add, cityName, form.postal, 'Philippines'].filter(Boolean).join(', ');
+
+  // "Use my current location": the address at that spot goes into the fields above, the customer checks and fixes it
+  const fillFromPin = async (point: LatLng) => {
+    try {
+      const [found, cities] = await Promise.all([reverseGeocode(point), locationService.getCities()]);
+      if (!found) {
+        toast.info('Pinned. We could not read the address there, please type it in.');
+        return;
+      }
+      // "Quezon City" vs "City of Quezon", "Manila" vs "City of Manila": match on either name containing the other
+      const norm = (s: string) => s.toLowerCase().replace(/^city of /, '').replace(/ city$/, '').trim();
+      const want = norm(found.city);
+      const city = want ? cities.find((c) => norm(c.city) === want) ?? cities.find((c) => norm(c.city).includes(want) || want.includes(norm(c.city))) : undefined;
+      onChange({
+        ...(found.street && { st_add: found.street }),
+        ...(found.postal && { postal: found.postal }),
+        ...(city && { city_id: String(city.city_id), country_id: String(city.country_id) }),
+      });
+      setErrors({});
+      toast.info(city || !found.city ? 'Address filled in from your location. Please check it.' : `Address filled in. ${found.city} is not in our city list, please pick the nearest one.`);
+    } catch {
+      toast.info('Pinned. We could not read the address there, please type it in.');
+    }
+  };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -72,7 +97,7 @@ export default function ShippingPage() {
           <AddressFields form={form} errors={errors} onChange={onChange} required disabled={saving} />
 
           <div className="border-t border-line pt-4">
-            <LocationPicker value={pin} address={mapAddress} onChange={setPin} disabled={saving} />
+            <LocationPicker value={pin} address={mapAddress} onChange={setPin} onLocate={fillFromPin} disabled={saving} />
           </div>
 
           <Textarea
