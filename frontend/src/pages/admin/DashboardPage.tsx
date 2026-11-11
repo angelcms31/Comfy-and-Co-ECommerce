@@ -50,7 +50,7 @@ export default function DashboardPage() {
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
             <StatCard label="Sales Today" value={formatPeso(summary.data.salesToday)} icon={<PhilippinePeso className="size-4" />} />
-            <StatCard label="Orders" value={summary.data.ordersToday} icon={<ShoppingCart className="size-4" />} />
+            <StatCard label="Orders Today" value={summary.data.ordersToday} icon={<ShoppingCart className="size-4" />} />
             <StatCard label="Low Stock Items" value={summary.data.lowStockCount} icon={<AlertTriangle className="size-4" />} tone="coral" />
             <StatCard
               label="Avg. Rating"
