@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, ShoppingCart, Trash2 } from 'lucide-react';
 import Button, { ButtonLink } from '@/components/ui/Button';
 import PriceTag from '@/components/ui/PriceTag';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
+import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
@@ -12,7 +13,9 @@ import { isBuyable, stockLabel, tileColor } from '@/lib/product';
 import { cn } from '@/lib/cn';
 import type { WishlistLine } from '@/types/models';
 
-function LikeRow({ item, index }: { item: WishlistLine; index: number }) {
+const checkbox = 'size-4 shrink-0 rounded accent-forest';
+
+function LikeRow({ item, index, checked, onCheck }: { item: WishlistLine; index: number; checked: boolean; onCheck: (on: boolean) => void }) {
   const { addItem } = useCart();
   const { remove } = useWishlist();
   const [busy, setBusy] = useState(false);
@@ -27,7 +30,15 @@ function LikeRow({ item, index }: { item: WishlistLine; index: number }) {
   };
 
   return (
-    <li className="flex gap-4 rounded-card bg-white p-3 shadow-card sm:items-center sm:p-4">
+    <li className="flex items-center gap-3 rounded-card bg-white p-3 shadow-card sm:gap-4 sm:p-4">
+      <input
+        type="checkbox"
+        className={checkbox}
+        checked={checked}
+        disabled={!isBuyable(variant)}
+        onChange={(e) => onCheck(e.target.checked)}
+        aria-label={`Select ${variant.prod_var_name}`}
+      />
       <Link to={link} className={cn('size-24 shrink-0 overflow-hidden rounded-xl sm:size-28', tileColor(index))}>
         <img src={firstImage(variant.images)} alt={variant.prod_var_name} className="size-full object-contain p-2" />
       </Link>
@@ -57,7 +68,38 @@ function LikeRow({ item, index }: { item: WishlistLine; index: number }) {
 
 export default function WishlistPage() {
   const { user, loading: authLoading } = useAuth();
-  const { items, loading, error, reload } = useWishlist();
+  const { items, loading, error, reload, remove } = useWishlist();
+  const { addItem } = useCart();
+  const toast = useToast();
+  const [picked, setPicked] = useState<Set<number>>(new Set()); // prod_var_ids
+  const [moving, setMoving] = useState(false);
+
+  // only items that can be bought can be picked; anything no longer liked drops out of the selection
+  const buyable = useMemo(() => items.filter((i) => isBuyable(i.variant)), [items]);
+  const selected = buyable.filter((i) => picked.has(i.prod_var_id));
+  const allPicked = buyable.length > 0 && selected.length === buyable.length;
+
+  const check = (prodVarId: number, on: boolean) =>
+    setPicked((p) => {
+      const next = new Set(p);
+      if (on) next.add(prodVarId);
+      else next.delete(prodVarId);
+      return next;
+    });
+
+  // one of each picked item goes to the cart, then leaves the Likes. Stops if a guest closes the sign in prompt
+  const moveSelected = async () => {
+    setMoving(true);
+    let moved = 0;
+    for (const item of selected) {
+      if (!(await addItem(item.variant, 1))) break;
+      await remove(item.wishlist_item_id);
+      moved += 1;
+    }
+    setMoving(false);
+    setPicked(new Set());
+    if (moved) toast.success(`${moved} ${moved === 1 ? 'item' : 'items'} moved to your cart`);
+  };
 
   let content;
   if (authLoading || loading) {
@@ -75,11 +117,30 @@ export default function WishlistPage() {
     );
   } else {
     content = (
-      <ul className="space-y-3">
-        {items.map((item, i) => (
-          <LikeRow key={item.wishlist_item_id} item={item} index={i} />
-        ))}
-      </ul>
+      <>
+        <div className="mb-3 flex min-h-9 flex-wrap items-center justify-between gap-3 text-sm">
+          <label className="flex items-center gap-2 text-ink">
+            <input
+              type="checkbox"
+              className={checkbox}
+              checked={allPicked}
+              disabled={buyable.length === 0}
+              onChange={(e) => setPicked(e.target.checked ? new Set(buyable.map((i) => i.prod_var_id)) : new Set())}
+            />
+            Select all ({buyable.length} {buyable.length === 1 ? 'item' : 'items'})
+          </label>
+          {selected.length > 0 && (
+            <Button size="sm" onClick={moveSelected} loading={moving}>
+              <ShoppingCart className="size-4" /> Move to cart ({selected.length})
+            </Button>
+          )}
+        </div>
+        <ul className="space-y-3">
+          {items.map((item, i) => (
+            <LikeRow key={item.wishlist_item_id} item={item} index={i} checked={picked.has(item.prod_var_id)} onCheck={(on) => check(item.prod_var_id, on)} />
+          ))}
+        </ul>
+      </>
     );
   }
 
