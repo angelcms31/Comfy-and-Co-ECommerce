@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, PhilippinePeso, ShoppingCart, Star } from 'lucide-react';
+import { AlertTriangle, Heart, PhilippinePeso, ShoppingCart, Star } from 'lucide-react';
 import { Select } from '@/components/ui/Input';
 import StatusPill from '@/components/ui/StatusPill';
 import Table, { type Column } from '@/components/ui/Table';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { dashboardService } from '@/services/dashboardService';
 import { useAsync } from '@/hooks/useAsync';
+import { firstImage } from '@/lib/images';
 import { formatPeso } from '@/lib/pricing';
 import type { OrderStat } from '@/types/db';
 import type { SalesRange } from '@/types/admin';
@@ -80,6 +81,34 @@ export default function DashboardPage() {
           >
             <SalesChart data={summary.data.chart} />
             <ForecastSummary data={summary.data.chart} unit={RANGES.find((r) => r.value === range)?.unit ?? 'day'} />
+          </Card>
+
+          <Card title="Most Liked" actions={<span className="text-sm text-muted">Saved to customers' Likes</span>}>
+            {summary.data.mostLiked.length === 0 ? (
+              <EmptyState title="No likes yet" />
+            ) : (
+              <ol className="divide-y divide-line">
+                {summary.data.mostLiked.map((p, i) => {
+                  const img = firstImage(p.images);
+                  return (
+                    <li key={p.product_id} className="flex items-center gap-3 py-2.5">
+                      <span className="w-5 shrink-0 text-center font-display text-lg font-semibold text-forest">{i + 1}</span>
+                      {img ? (
+                        <img src={img} alt="" className="size-11 shrink-0 rounded-lg border border-line object-cover" />
+                      ) : (
+                        <span className="size-11 shrink-0 rounded-lg bg-cream" />
+                      )}
+                      <Link to={`/products/${p.product_id}`} target="_blank" className="min-w-0 flex-1 truncate font-medium text-ink hover:text-forest hover:underline">
+                        {p.product_name}
+                      </Link>
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-coral/20 px-2.5 py-1 text-sm font-semibold text-coral-dark">
+                        <Heart className="size-3.5 fill-current" /> {p.likes}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
           </Card>
 
           <Card

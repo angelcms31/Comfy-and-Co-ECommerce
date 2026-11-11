@@ -128,6 +128,20 @@ def dashboard(db: Db, period: Literal["7d", "30d", "12m", "24m"] = Query("7d", a
         (TIMEZONE, day, LOW_STOCK_LIMIT),
     ).fetchone()
 
+    # the products customers saved to their Likes most (all colors of a product together), top 5
+    most_liked = db.execute(
+        """
+        select p.product_id, p.product_name, count(*) as likes,
+               (array_agg(v.images order by v.prod_var_id) filter (where v.images is not null))[1] as images
+        from wishlist_item w
+        join prod_var v on v.prod_var_id = w.prod_var_id
+        join product p on p.product_id = v.product_id
+        group by p.product_id, p.product_name
+        order by likes desc, p.product_name
+        limit 5
+        """
+    ).fetchall()
+
     return {
         "salesToday": sales_today,
         "ordersToday": counts["orders_today"],
@@ -136,6 +150,7 @@ def dashboard(db: Db, period: Literal["7d", "30d", "12m", "24m"] = Query("7d", a
         "reviewCount": counts["review_count"],
         "chart": chart,
         "recentOrders": queries.orders_with_items(db)[:6],
+        "mostLiked": most_liked,
     }
 
 

@@ -175,7 +175,7 @@ Every change below is written to `audit_log` (who, what, IP, device).
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
-| GET | `/admin/dashboard` | `range` (`7d` / `30d` / `12m` / `24m`) | `DashboardSummary`; `chart` ends with forecast points: 1 day / 1 week, or 6 / 12 months for the monthly ranges |
+| GET | `/admin/dashboard` | `range` (`7d` / `30d` / `12m` / `24m`) | `DashboardSummary`; `chart` ends with forecast points: 1 day / 1 week, or 6 / 12 months for the monthly ranges. `mostLiked`: top 5 products by how many customers saved them to their Likes (`product_id, product_name, likes, images`) |
 | POST | `/admin/products` | `ProductInput` | `ProductWithVariants` |
 | PUT | `/admin/products/{product_id}` | `ProductInput` | `ProductWithVariants` |
 | PATCH | `/admin/products/{product_id}/archive` | `{ archived }` | `ProductWithVariants`; archived = `is_avail` false, hidden from the store |

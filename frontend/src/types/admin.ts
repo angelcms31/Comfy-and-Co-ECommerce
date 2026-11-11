@@ -15,6 +15,8 @@ export interface DashboardSummary {
   // monthly ranges: the current month is `partial` (month to date) and `expected` is the trend's figure for it
   chart: { label: string; total: number; forecast: boolean; partial?: boolean; expected?: number }[];
   recentOrders: OrderWithItems[];
+  // top 5 products by how many customers saved them to their Likes
+  mostLiked: { product_id: number; product_name: string; likes: number; images: string | null }[];
 }
 
 export type AdminRoleName = Exclude<UserRoleName, 'customer'>;
