@@ -43,6 +43,7 @@ export default function LocationPicker({ value, address, onChange, onLocate, dis
       markerRef.current = L.marker(point, { icon: pinIcon, draggable: !disabled }).addTo(map);
       markerRef.current.on('dragend', () => {
         const { lat, lng } = markerRef.current!.getLatLng();
+        setHint(null);
         latest.current([Number(lat.toFixed(6)), Number(lng.toFixed(6))]);
       });
     }
@@ -57,6 +58,7 @@ export default function LocationPicker({ value, address, onChange, onLocate, dis
     map.setView(STORE_LOCATION, 12);
     map.on('click', (e: L.LeafletMouseEvent) => {
       if (disabled) return;
+      setHint(null);
       latest.current([Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))]);
     });
     return () => {
@@ -67,37 +69,54 @@ export default function LocationPicker({ value, address, onChange, onLocate, dis
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // a pin: show it. No pin: find the typed address and look there, so the customer only has to tap their house
+  // the pin follows the value: shown and centred, or removed
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     if (value) {
       place(value);
       map.setView(value, Math.max(map.getZoom(), 16));
-      setHint(null);
-      return;
-    }
-    if (markerRef.current) {
+    } else if (markerRef.current) {
       markerRef.current.remove();
       markerRef.current = null;
     }
-    let cancelled = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value?.[0], value?.[1]]);
+
+  // The pin follows the typed address: when it changes (or there's no pin yet), the address is looked up and the pin
+  // put there, so the customer only has to drag it to the exact house. A saved pin stays put until the address is edited.
+  // Only an exact match places the pin; if just the city or street is found, the map looks there and the pin is left off,
+  // so a rider is never sent to the middle of the city.
+  const lastAddress = useRef<string | null>(value ? address : null);
+  useEffect(() => {
     const clean = address.replace(/\s+/g, ' ').trim();
+    if (clean === lastAddress.current) return;
+    lastAddress.current = clean;
     if (clean.length < 8) return;
-    geocode(clean)
-      .then((found) => {
-        if (cancelled || !found || mapRef.current !== map) return;
-        map.setView(found, 15);
-        setHint('Tap your house on the map to drop a pin, or use your current location.');
-      })
-      .catch(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const exact = await geocode(clean, { exact: true });
+        if (cancelled) return;
+        if (exact) {
+          latest.current(exact);
+          setHint('Pin placed from your address. Drag it to your exact house, or use your current location.');
+          return;
+        }
+        latest.current(null);
+        const area = await geocode(clean);
+        if (cancelled || !area || !mapRef.current) return;
+        mapRef.current.setView(area, 15);
+        setHint('We found the area but not the exact address. Tap your house on the map to drop a pin, or use your current location.');
+      } catch {
         if (!cancelled) setHint('We could not find this address on the map. You can still drop a pin.');
-      });
+      }
+    }, 700); // waits for the typing to pause (OpenStreetMap allows about one lookup a second)
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value?.[0], value?.[1], address]);
+  }, [address]);
 
   const useMyLocation = () => {
     if (!navigator.geolocation) {
@@ -109,6 +128,7 @@ export default function LocationPicker({ value, address, onChange, onLocate, dis
       (pos) => {
         setLocating(false);
         const point: LatLng = [Number(pos.coords.latitude.toFixed(6)), Number(pos.coords.longitude.toFixed(6))];
+        setHint(null);
         onChange(point);
         onLocate?.(point);
       },
@@ -131,7 +151,16 @@ export default function LocationPicker({ value, address, onChange, onLocate, dis
             <LocateFixed className="size-4" /> Use my current location
           </Button>
           {value && (
-            <Button type="button" size="sm" variant="ghost" onClick={() => onChange(null)} disabled={disabled}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setHint(null);
+                onChange(null);
+              }}
+              disabled={disabled}
+            >
               <X className="size-4" /> Remove pin
             </Button>
           )}
@@ -143,7 +172,7 @@ export default function LocationPicker({ value, address, onChange, onLocate, dis
       </div>
       <p className="flex items-start gap-1.5 text-xs text-muted">
         <MapPin className="mt-0.5 size-3.5 shrink-0 text-forest" />
-        {value ? `Pinned at ${value[0].toFixed(5)}, ${value[1].toFixed(5)}. Drag the pin to adjust it.` : (hint ?? 'Tap your house on the map to drop a pin.')}
+        {hint ?? (value ? `Pinned at ${value[0].toFixed(5)}, ${value[1].toFixed(5)}. Drag the pin to adjust it.` : 'Type your address above and the pin goes there, or tap your house on the map.')}
       </p>
     </div>
   );

@@ -97,13 +97,15 @@ function readCache(): Record<string, LatLng> {
   }
 }
 
-// OpenStreetMap's free geocoder. If the full address isn't found, the street is dropped and it tries again with just the city.
-export async function geocode(address: string): Promise<LatLng | null> {
+// OpenStreetMap's free geocoder. If the full address isn't found, the street is dropped and it tries again with just the city,
+// unless `exact` is set: then only the full address counts (for placing a pin, which must not land in the middle of a city).
+export async function geocode(address: string, { exact = false } = {}): Promise<LatLng | null> {
   const cache = readCache();
-  if (cache[address]) return cache[address];
+  const key = exact ? `exact:${address}` : address;
+  if (cache[key]) return cache[key];
 
   const parts = address.split(',').map((p) => p.trim()).filter(Boolean);
-  const tries = [parts, parts.slice(1), parts.slice(1, 2)].filter((t) => t.length).map((t) => t.join(', '));
+  const tries = (exact ? [parts] : [parts, parts.slice(1), parts.slice(1, 2)]).filter((t) => t.length).map((t) => t.join(', '));
   for (const q of tries) {
     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ph&q=${encodeURIComponent(q)}`);
     if (!res.ok) continue;
@@ -111,7 +113,7 @@ export async function geocode(address: string): Promise<LatLng | null> {
     if (hit) {
       const point: LatLng = [Number(hit.lat), Number(hit.lon)];
       try {
-        localStorage.setItem(GEO_CACHE, JSON.stringify({ ...cache, [address]: point }));
+        localStorage.setItem(GEO_CACHE, JSON.stringify({ ...cache, [key]: point }));
       } catch {
         // storage full or blocked, it just gets looked up again next time
       }
