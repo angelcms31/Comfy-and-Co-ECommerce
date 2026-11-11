@@ -58,7 +58,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     async (prodVarId: number) => {
       // wishlist_col needs a user, so guests are sent to log in first
       if (!user) {
-        toast.info('Log in to save items to your Likes.');
+        toast.info('Please sign-in');
         navigate('/login', { state: { from: location.pathname + location.search } });
         return;
       }

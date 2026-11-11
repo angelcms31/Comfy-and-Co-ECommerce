@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { cartService } from '@/services/cartService';
 import { useToast } from '@/components/ui/Toast';
 import type { ProdVar } from '@/types/db';
@@ -23,6 +24,8 @@ const message = (err: unknown) => (err instanceof Error ? err.message : 'Somethi
 export function CartProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
   const loggedIn = !!user;
 
   const [lines, setLines] = useState<CartLine[]>([]);
@@ -49,6 +52,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback<CartValue['addItem']>(
     async (variant, quantity) => {
+      // adding to the cart needs an account: guests go to sign in, then come back to this page
+      if (!loggedIn) {
+        toast.info('Please sign-in');
+        navigate('/login', { state: { from: location.pathname + location.search } });
+        return false;
+      }
       const inCart = lines.find((l) => l.prod_var_id === variant.prod_var_id)?.quantity ?? 0;
       if (inCart >= variant.stocks) {
         toast.info('You already have all the available stock in your cart.');
@@ -63,7 +72,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return false;
       }
     },
-    [lines, loggedIn, toast],
+    [lines, loggedIn, toast, navigate, location.pathname, location.search],
   );
 
   const updateQuantity = useCallback<CartValue['updateQuantity']>(
