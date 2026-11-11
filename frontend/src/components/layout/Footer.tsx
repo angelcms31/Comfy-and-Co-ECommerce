@@ -15,8 +15,10 @@ const explore = [
 ];
 
 // payment and courier badges share one 2-column grid so every badge is the same width and the rows line up
-const badges = 'mx-auto grid max-w-64 grid-cols-2 gap-2 sm:mx-0';
-const badge = 'whitespace-nowrap rounded-md bg-white px-2 py-1.5 text-center text-[11px] font-semibold text-forest';
+const badges = 'flex flex-wrap justify-center gap-2 sm:justify-start';
+// outlined, no fill, so they sit on the green footer
+const badge = 'whitespace-nowrap rounded-md border border-white/30 px-2.5 py-1 text-center text-[11px] font-semibold text-white/90';
+const EWALLETS = ['GCash', 'Maya', 'MariBank'];
 
 export default function Footer() {
   const { user } = useAuth(); // Track order only shows when logged in
@@ -49,8 +51,16 @@ export default function Footer() {
 
         <div className="text-center sm:col-span-2 sm:text-left md:col-span-1">
           <h3 className="mb-3 font-sans text-sm font-semibold">Payment Methods</h3>
+          <p className="mb-2 text-xs text-white/70">E-wallet</p>
           <div className={badges}>
-            <span className={badge}>GCash</span>
+            {EWALLETS.map((w) => (
+              <span key={w} className={badge}>
+                {w}
+              </span>
+            ))}
+          </div>
+          <p className="mb-2 mt-3 text-xs text-white/70">Cash</p>
+          <div className={badges}>
             <span className={badge}>Cash on Delivery</span>
           </div>
           <h3 className="mb-3 mt-6 font-sans text-sm font-semibold">Courier Partners</h3>
