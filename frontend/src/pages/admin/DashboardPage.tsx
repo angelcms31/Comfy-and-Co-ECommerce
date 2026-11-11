@@ -27,7 +27,8 @@ const RANGES: { value: SalesRange; label: string; unit: 'day' | 'week' | 'month'
 const columns: Column<OrderWithItems>[] = [
   { key: 'num', header: 'Order #', render: (o) => <span className="font-medium">#{o.order_num}</span> },
   { key: 'customer', header: 'Customer', render: (o) => o.customer_name },
-  { key: 'item', header: 'Item', render: (o) => <OrderItemsCell order={o} />, className: 'max-w-64' },
+  // hidden while the card shares the row with Most Liked (lg to 2xl), there's no room for it there
+  { key: 'item', header: 'Item', render: (o) => <OrderItemsCell order={o} />, className: 'max-w-64 lg:hidden 2xl:table-cell' },
   { key: 'total', header: 'Total', render: (o) => <span className="font-medium">{formatPeso(o.total_amt)}</span> },
   { key: 'status', header: 'Status', render: (o) => <StatusPill status={o.order_stat} /> },
 ];
@@ -83,59 +84,62 @@ export default function DashboardPage() {
             <ForecastSummary data={summary.data.chart} unit={RANGES.find((r) => r.value === range)?.unit ?? 'day'} />
           </Card>
 
-          <Card title="Most Liked" actions={<span className="text-sm text-muted">Saved to customers' Likes</span>}>
-            {summary.data.mostLiked.length === 0 ? (
-              <EmptyState title="No likes yet" />
-            ) : (
-              <ol className="divide-y divide-line">
-                {summary.data.mostLiked.map((p, i) => {
-                  const img = firstImage(p.images);
-                  return (
-                    <li key={p.product_id} className="flex items-center gap-3 py-2.5">
-                      <span className="w-5 shrink-0 text-center font-display text-lg font-semibold text-forest">{i + 1}</span>
-                      {img ? (
-                        <img src={img} alt="" className="size-11 shrink-0 rounded-lg border border-line object-cover" />
-                      ) : (
-                        <span className="size-11 shrink-0 rounded-lg bg-cream" />
-                      )}
-                      <Link to={`/products/${p.product_id}`} target="_blank" className="min-w-0 flex-1 truncate font-medium text-ink hover:text-forest hover:underline">
-                        {p.product_name}
-                      </Link>
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-coral/20 px-2.5 py-1 text-sm font-semibold text-coral-dark">
-                        <Heart className="size-3.5 fill-current" /> {p.likes}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-          </Card>
-
-          <Card
-            title="Recent Orders"
-            actions={
-              <div className="flex items-center gap-3">
-                <div className="w-36">
-                  <Select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value as OrderStat | '')} className="h-9 !py-0">
-                    <option value="">Status: All</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Shipped">Shipped</option>
-                    <option value="Delivered">Delivered</option>
-                    <option value="Cancelled">Cancelled</option>
-                  </Select>
+          {/* side by side on wide screens so both fit without scrolling */}
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <Card
+              className="min-w-0"
+              title="Recent Orders"
+              actions={
+                <div className="flex items-center gap-3">
+                  <div className="w-36">
+                    <Select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value as OrderStat | '')} className="h-9 !py-0">
+                      <option value="">Status: All</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Shipped">Shipped</option>
+                      <option value="Delivered">Delivered</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </Select>
+                  </div>
+                  <Link to="/admin/orders" className="text-sm text-forest hover:underline">
+                    View all
+                  </Link>
                 </div>
-                <Link to="/admin/orders" className="text-sm text-forest hover:underline">
-                  View all
-                </Link>
-              </div>
-            }
-          >
-            {recent.length === 0 ? (
-              <EmptyState title="No orders here" />
-            ) : (
-              <Table columns={columns} rows={recent} rowKey={(o) => o.order_id} />
-            )}
-          </Card>
+              }
+            >
+              {recent.length === 0 ? (
+                <EmptyState title="No orders here" />
+              ) : (
+                <Table columns={columns} rows={recent} rowKey={(o) => o.order_id} />
+              )}
+            </Card>
+            <Card className="min-w-0" title="Most Liked" actions={<span className="text-sm text-muted">Saved to customers' Likes</span>}>
+              {summary.data.mostLiked.length === 0 ? (
+                <EmptyState title="No likes yet" />
+              ) : (
+                <ol className="divide-y divide-line">
+                  {summary.data.mostLiked.map((p, i) => {
+                    const img = firstImage(p.images);
+                    return (
+                      <li key={p.product_id} className="flex items-center gap-3 py-2.5">
+                        <span className="w-5 shrink-0 text-center font-display text-lg font-semibold text-forest">{i + 1}</span>
+                        {img ? (
+                          <img src={img} alt="" className="size-11 shrink-0 rounded-lg border border-line object-cover" />
+                        ) : (
+                          <span className="size-11 shrink-0 rounded-lg bg-cream" />
+                        )}
+                        <Link to={`/products/${p.product_id}`} target="_blank" className="min-w-0 flex-1 truncate font-medium text-ink hover:text-forest hover:underline">
+                          {p.product_name}
+                        </Link>
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-coral/20 px-2.5 py-1 text-sm font-semibold text-coral-dark">
+                          <Heart className="size-3.5 fill-current" /> {p.likes}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </Card>
+          </div>
         </div>
       )}
     </>
