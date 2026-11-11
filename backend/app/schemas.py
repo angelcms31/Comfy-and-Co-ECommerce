@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from datetime import date
 from typing import Literal
 
@@ -16,13 +17,18 @@ class LoginIn(BaseModel):
     password: str
 
 
-# full names: letters from any language, spaces, and . ' - (frontend/src/lib/names.ts has the same rule)
+# full names: letters from any language, spaces, and . ' - (frontend/src/lib/names.ts has the same rule).
+# No digits, symbols or emojis; the blank "letters" (Hangul fillers) that look like an empty name are refused too.
 NAME = re.compile(r"^[^\W\d_](?:[^\W\d_]|[ .'’-])*$")
+BLANK_LETTERS = re.compile(r"[\u115f\u1160\u3164\uffa0]")
 
 
 def check_name(value: str | None) -> str | None:
-    if value is not None and not NAME.match(value.strip()):
-        raise ValueError("Use letters, spaces and . ' - only")
+    if value is None:
+        return None
+    value = unicodedata.normalize("NFC", value).strip()
+    if not NAME.match(value) or BLANK_LETTERS.search(value):
+        raise ValueError("Use letters, spaces and . ' - only (no numbers, symbols or emojis)")
     return value
 
 
@@ -102,6 +108,8 @@ class Customer(BaseModel):
     st_add: str = Field(min_length=1)
     postal: str = Field(min_length=1)
     city_id: int
+
+    _name = field_validator("full_name")(check_name)
 
 
 class DropOff(BaseModel):

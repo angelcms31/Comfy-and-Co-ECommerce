@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { emailError } from '@/lib/email';
 import { cleanMobile, isValidMobile, MOBILE_ERROR, MOBILE_LENGTH, MOBILE_REQUIRED, normalizeMobile } from '@/lib/mobile';
-import { isValidName, NAME_ERROR } from '@/lib/names';
+import { cleanName, isValidName, NAME_ERROR } from '@/lib/names';
 import { authService } from '@/services/authService';
 import AuthCard from './AuthCard';
 
@@ -89,7 +89,7 @@ export default function RegisterPage() {
     <AuthCard title="Create an account" subtitle="Save your favorites and check out faster." wide>
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Input label="Full name" autoComplete="name" value={form.full_name} onChange={set('full_name')} filled error={errors.full_name} />
+          <Input label="Full name" autoComplete="name" value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: cleanName(e.target.value) }))} filled error={errors.full_name} />
           <Input
             label="Email"
             type="email"

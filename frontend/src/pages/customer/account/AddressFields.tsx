@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import Input, { Select } from '@/components/ui/Input';
 import { useAsync } from '@/hooks/useAsync';
 import { cleanMobile, isValidMobile, MOBILE_ERROR, MOBILE_LENGTH, MOBILE_REQUIRED, normalizeMobile } from '@/lib/mobile';
-import { isValidName, NAME_ERROR } from '@/lib/names';
+import { cleanName, isValidName, NAME_ERROR } from '@/lib/names';
 import { locationService } from '@/services/locationService';
 import type { UserProfile } from '@/types/models';
 
@@ -69,7 +69,7 @@ export function NameMobileFields({ form, errors, onChange, disabled }: Props) {
         label={<>Full Name{req(true)}</>}
         autoComplete="name"
         value={form.full_name}
-        onChange={(e) => onChange({ full_name: e.target.value })}
+        onChange={(e) => onChange({ full_name: cleanName(e.target.value) })}
         error={errors.full_name}
         disabled={disabled}
       />

@@ -20,7 +20,7 @@ import { ACCOUNT_DELETE_DAYS, REFUND_DAYS } from '@/lib/constants';
 import { ROLE_LABEL } from '@/lib/roles';
 import { emailError } from '@/lib/email';
 import { downloadCsv } from '@/lib/csv';
-import { isValidName, NAME_ERROR } from '@/lib/names';
+import { cleanName, isValidName, NAME_ERROR } from '@/lib/names';
 import type { AdminAccount, AdminRoleName, AllSettings, AuditAction, AuditLogRow, DeliveryVehicle, NewAdminInput } from '@/types/admin';
 import AdminPageHeader from './AdminPageHeader';
 import { Card, FilterPills } from './AdminUi';
@@ -181,7 +181,7 @@ function AddAdminModal({ open, onClose, onAdded }: { open: boolean; onClose: () 
       }
     >
       <form id="add-admin" onSubmit={onSubmit} className="space-y-3">
-        <Input label="Full name" required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} error={nameError} />
+        <Input label="Full name" required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: cleanName(e.target.value) })} error={nameError} />
         <Input label="Email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} error={mailError} />
         <PasswordInput
           label="Temporary password"
