@@ -259,7 +259,7 @@ export default function ProductDetailsPage() {
 
           <p className={cn('mt-5 flex items-center gap-1.5 text-sm font-medium', stock.tone === 'ok' ? 'text-forest' : 'text-coral-dark')}>
             {stock.tone !== 'ok' && <AlertCircle className="size-4" />}
-            {stock.tone === 'low' ? `Only ${variant.stocks} ${variant.stocks === 1 ? 'stock' : 'stocks'} left` : stock.text}
+            {stock.tone === 'low' ? `Only ${variant.stocks} left in stock` : stock.text}
             {inCart > 0 && <span className="font-normal text-muted"> · {inCart} in your cart</span>}
           </p>
 

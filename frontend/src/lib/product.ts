@@ -17,7 +17,7 @@ export function onPromo(p: ProductWithVariants) {
 export function stockLabel(v: Pick<ProdVar, 'is_avail' | 'stocks'>) {
   if (!isBuyable(v)) return { text: 'Out of stock', tone: 'out' as const };
   if (v.stocks <= LOW_STOCK_LIMIT) return { text: `Only ${v.stocks} left`, tone: 'low' as const };
-  return { text: 'In stock', tone: 'ok' as const };
+  return { text: `${v.stocks} in stock`, tone: 'ok' as const }; // the number is shown so shoppers know how many they can order
 }
 
 // card / tile background colors from the design, picked by index
