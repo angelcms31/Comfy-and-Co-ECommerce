@@ -122,7 +122,7 @@ export async function downloadReceiptPdf(order: OrderWithItems, qr: string): Pro
   y = Math.max(y + 6, qrY + qrSize + 44);
   doc.setDrawColor(...(cod ? INK : LINE)).setLineWidth(cod ? 1.5 : 0.6).roundedRect(M, y, W - 2 * M, 44, 5, 5);
   doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...MUTED).text(cod ? 'COLLECT FROM CUSTOMER' : 'NOTHING TO COLLECT', M + 10, y + 14);
-  doc.setFontSize(16).setTextColor(...INK).text(cod ? php(order.total_amt) : 'PAID via GCash', M + 10, y + 34);
+  doc.setFontSize(16).setTextColor(...INK).text(cod ? php(order.total_amt) : `PAID via ${order._temp_payment_wallet ?? 'e-wallet'}`, M + 10, y + 34);
 
   // footer
   doc.setDrawColor(...LINE).setLineWidth(0.5).line(M, H - 40, W - M, H - 40);

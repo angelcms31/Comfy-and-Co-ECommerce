@@ -121,7 +121,7 @@ class DropOff(BaseModel):
 
 class PlaceOrderIn(BaseModel):
     lines: list[CartItemIn] = Field(min_length=1)
-    payment_method: Literal["GCash", "COD"]
+    payment_method: Literal["GCash", "COD"]  # "GCash" stands for every e-wallet (config.EWALLETS), the wallet itself is in the payment tag
     customer: Customer
     note: str | None = None
     # fulfillment is also written into shipping_add (SCHEMA_GAPS #18), the courier is always Lalamove for a delivery
@@ -191,7 +191,9 @@ class ContactIn(BaseModel):
 
 
 class GcashPaymentIn(BaseModel):
-    reference: str = Field(pattern=r"^\d{13}$")
+    # letters and digits; a GCash reference must be its 13 digits (checked in orders.confirm_gcash)
+    reference: str = Field(pattern=r"^[A-Za-z0-9]{6,30}$")
+    wallet: Literal["GCash", "Maya", "MariBank"] = "GCash"  # the app the customer paid with (config.EWALLETS)
 
 
 class GcashDecisionIn(BaseModel):

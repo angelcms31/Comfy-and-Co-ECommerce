@@ -11,7 +11,8 @@ import { useAsync } from '@/hooks/useAsync';
 import { orderService } from '@/services/orderService';
 import { productService } from '@/services/productService';
 import type { CartLine, DeliveryQuote, UserProfile, VariantWithProduct } from '@/types/models';
-import { COURIER, DELIVERY_DAYS, STORE_ADDRESS } from '@/lib/constants';
+import { COURIER, DELIVERY_DAYS, STORE_ADDRESS, type Ewallet } from '@/lib/constants';
+import WalletPicker from '@/components/order/WalletPicker';
 import { itemCount, lineTotal, linesTotal, readCheckoutIds } from '@/lib/checkout';
 import { addDays, toDay } from '@/lib/dates';
 import { firstImage } from '@/lib/images';
@@ -90,7 +91,8 @@ function CheckoutForm({ lines, user, buyVariant, buySearch }: { lines: CartLine[
   const navigate = useNavigate();
 
   const [fulfillment, setFulfillment] = useState<Fulfillment>('delivery');
-  const [payment, setPayment] = useState<PaymentMethod>('COD');
+  const [payment, setPayment] = useState<PaymentMethod>('COD'); // 'GCash' stands for every e-wallet
+  const [wallet, setWallet] = useState<Ewallet>('GCash');
   const [placing, setPlacing] = useState(false);
 
   const hasAddress = !!(user.mobile_no && user.st_add && user.postal && user.city_id);
@@ -121,7 +123,7 @@ function CheckoutForm({ lines, user, buyVariant, buySearch }: { lines: CartLine[
         drop_off: delivery ? { lat: user.lat, lng: user.lng, delivery_note: user.delivery_note } : undefined,
       });
       cart.reload(); // the backend took the ordered items out of the cart
-      if (payment === 'GCash') navigate(`/checkout/gcash/${order.order_id}`, { replace: true });
+      if (payment === 'GCash') navigate(`/checkout/gcash/${order.order_id}?wallet=${wallet}`, { replace: true });
       else navigate(`/orders/${order.order_id}`, { replace: true, state: { placed: true } });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not place your order');
@@ -248,7 +250,11 @@ function CheckoutForm({ lines, user, buyVariant, buySearch }: { lines: CartLine[
               icon={<Banknote className="size-4" />}
               label={delivery ? 'Cash on Delivery' : 'Cash on Pickup'}
             />
-            <Choice name="payment" checked={payment === 'GCash'} onSelect={() => setPayment('GCash')} icon={<Smartphone className="size-4" />} label="GCash" />
+            <Choice name="payment" checked={payment === 'GCash'} onSelect={() => setPayment('GCash')} icon={<Smartphone className="size-4" />} label="E-wallet" />
+            {/* which app the customer pays with; all of them scan the same store QR on the next page */}
+            {payment === 'GCash' && (
+              <WalletPicker value={wallet} onChange={setWallet} className="pl-7 sm:pl-11" />
+            )}
           </div>
 
           <h3 className="mt-6 font-sans text-base font-semibold text-ink">Order Summary</h3>

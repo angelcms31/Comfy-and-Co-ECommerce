@@ -14,8 +14,9 @@ export const orderService = {
   // after the rider marked it delivered: did the customer really get it?
   deliveryFeedback: (orderId: number, received: boolean, details?: string) =>
     http<OrderWithItems>(`/orders/${orderId}/delivery-feedback`, { method: 'POST', body: { received, details } }),
-  confirmGcash: (orderId: number, reference: string) =>
-    http<OrderWithItems>(`/orders/${orderId}/gcash/confirm`, { method: 'POST', body: { reference } }),
+  // the reference number of an e-wallet payment, and which e-wallet it came from
+  confirmGcash: (orderId: number, reference: string, wallet: string) =>
+    http<OrderWithItems>(`/orders/${orderId}/gcash/confirm`, { method: 'POST', body: { reference, wallet } }),
   requestRefund: (orderId: number, reason: string, details: string, photos: string[]) =>
     http<OrderWithItems>(`/orders/${orderId}/refund`, { method: 'POST', body: { reason, details, photos } }),
   uploadRefundPhoto: (file: File) => {

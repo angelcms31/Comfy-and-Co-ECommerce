@@ -245,7 +245,7 @@ export default function OrderConfirmationPage() {
         <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
           {canPayGcash(order) && (
             <ButtonLink to={`/checkout/gcash/${order.order_id}`} size="lg" className="w-full sm:w-auto sm:px-10">
-              Pay with GCash
+              Pay with e-wallet
             </ButtonLink>
           )}
           <ButtonLink to="/products" size="lg" variant={canPayGcash(order) ? 'outline' : undefined} className="w-full sm:w-auto sm:px-10">

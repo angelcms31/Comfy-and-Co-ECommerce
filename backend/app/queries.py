@@ -89,23 +89,31 @@ def variants_with_product(db, prod_var_ids: list[int]) -> list[dict]:
     return rows
 
 
-# added to the end of shipping_add as a GCash payment moves along (SCHEMA_GAPS #2). A cancel reason can come after it.
-GCASH_TAG = re.compile(r" \[GCash (submitted|paid|rejected), ref (\d+)\](?: \[Cancelled by buyer: .+\])?$")
+# added to the end of shipping_add as an e-wallet payment moves along (SCHEMA_GAPS #2), e.g. " [Maya submitted, ref 1A2B3C]".
+# payment_method stays "GCash" for every e-wallet (no schema change), the tag names the wallet the customer used.
+# A cancel reason can come after it.
+GCASH_TAG = re.compile(r" \[(GCash|Maya|MariBank) (submitted|paid|rejected), ref ([A-Za-z0-9]+)\](?: \[Cancelled by buyer: .+\])?$")
 GCASH_STATUS = {"submitted": "For verification", "paid": "Paid", "rejected": "Rejected"}
 
 
 def payment_status(shipping_add: str) -> tuple[str, str | None]:
     tag = GCASH_TAG.search(shipping_add)
-    return (GCASH_STATUS[tag.group(1)], tag.group(2)) if tag else ("Unpaid", None)
+    return (GCASH_STATUS[tag.group(2)], tag.group(3)) if tag else ("Unpaid", None)
 
 
-def set_gcash_tag(db, order_id: int, state: str, reference: str) -> None:
+def payment_wallet(shipping_add: str) -> str | None:
+    # the e-wallet the reference number came from, None before one was sent
+    tag = GCASH_TAG.search(shipping_add)
+    return tag.group(1) if tag else None
+
+
+def set_gcash_tag(db, order_id: int, state: str, reference: str, wallet: str = "GCash") -> None:
     db.execute(
         """
-        update "order" set shipping_add = regexp_replace(shipping_add, ' \\[GCash (submitted|rejected), ref \\d+\\]$', '') || %s
+        update "order" set shipping_add = regexp_replace(shipping_add, ' \\[(GCash|Maya|MariBank) (submitted|rejected), ref [A-Za-z0-9]+\\]$', '') || %s
         where order_id = %s
         """,
-        (f" [GCash {state}, ref {reference}]", order_id),
+        (f" [{wallet} {state}, ref {reference}]", order_id),
     )
 
 
@@ -139,6 +147,7 @@ def orders_with_items(db, where: str = "", params: tuple = ()) -> list[dict]:
         o["items"] = [i for i in items if i["order_id"] == o["order_id"]]
         o["attempts"] = [a for a in attempts if a["order_id"] == o["order_id"]]  # the rider's failed hand-overs
         o["_temp_payment_status"], o["_temp_payment_ref"] = payment_status(o["shipping_add"])
+        o["_temp_payment_wallet"] = payment_wallet(o["shipping_add"])
     return orders
 
 

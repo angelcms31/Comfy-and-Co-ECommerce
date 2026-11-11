@@ -9,7 +9,7 @@ const pages = {
     sections: [
       ['Orders', 'An order is confirmed once you receive an order number. We may cancel an order if an item runs out of stock, and we will let you know if that happens.'],
       ['Prices', 'All prices are in Philippine Peso (₱). Sale prices are valid only within the dates shown on the product page.'],
-      ['Payment', 'We accept GCash and Cash on Delivery. For COD, please prepare the exact amount when your order arrives.'],
+      ['Payment', 'We accept e-wallets (GCash, Maya and MariBank) and Cash on Delivery. For COD, please prepare the exact amount when your order arrives.'],
       ['Delivery', 'Delivery times depend on your location. Someone must be present to receive and check the items.'],
       ['Returns', `Items that arrive damaged or wrong can be reported within ${REFUND_DAYS} days of delivery for a refund.`],
     ],

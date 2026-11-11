@@ -129,7 +129,7 @@ function OrderCard({
       ),
     to_ship: (
       <>
-        {/* a paid GCash order needs the store to send the money back, so it goes through support */}
+        {/* a paid e-wallet order needs the store to send the money back, so it goes through support */}
         {order._temp_payment_status !== 'Paid' && (
           <Button variant="outline" size="sm" onClick={onCancel}>
             Cancel Order

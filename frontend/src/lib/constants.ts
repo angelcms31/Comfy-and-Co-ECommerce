@@ -1,7 +1,22 @@
 export const LOW_STOCK_LIMIT = 5;
 
-// the store's GCash QR, from the GCash app, cropped to just the code so it's big enough to scan on the page
+// the e-wallets a customer can pay with, each with the store's own QR for it, and the order is saved
+// with payment_method 'GCash' for any of them; the wallet used is kept with the reference number (backend queries.GCASH_TAG)
+export const EWALLETS = ['GCash', 'Maya', 'MariBank'] as const;
+export type Ewallet = (typeof EWALLETS)[number];
+export const isEwallet = (v: string | null | undefined): v is Ewallet => EWALLETS.includes(v as Ewallet);
+// how long a reference number is: GCash always 13 digits, the others vary (letters and digits)
+export const referenceRule = (wallet: Ewallet) => (wallet === 'GCash' ? { min: 13, max: 13, digitsOnly: true } : { min: 6, max: 30, digitsOnly: false });
+
+// the store's QR, from the GCash app, cropped to just the code so it's big enough to scan on the page
 export const GCASH_QR_IMAGE = '/images/gcash-qr.png';
+// each e-wallet's logo and the store's QR for it (public/images/qr). A missing QR falls back to the GCash one,
+// which is a QR Ph code the other apps can scan too
+export const EWALLET_INFO: Record<Ewallet, { logo: string; qr: string; note: string }> = {
+  GCash: { logo: '/images/ewallets/gcash.png', qr: GCASH_QR_IMAGE, note: 'Pay with your GCash app' },
+  Maya: { logo: '/images/ewallets/maya.png', qr: '/images/qr/maya.png', note: 'Pay with your Maya app' },
+  MariBank: { logo: '/images/ewallets/maribank.png', qr: '/images/qr/maribank.png', note: 'Pay with your MariBank app' },
+};
 export const GCASH_ACCOUNT_NAME = 'AN**L L** C.'; // written the way GCash shows it, so customers can check they're paying the right account
 export const DAILY_SALES_TARGET = 50000;
 export const MAX_LOGIN_ATTEMPTS = 5;
@@ -29,7 +44,7 @@ export const CATEGORY_PHOTOS: Record<string, number> = {
 
 // every delivery is one Lalamove booking (backend COURIER); the fee comes from POST /orders/delivery-quote
 export const COURIER = 'Lalamove';
-export const DELIVERY_DAYS = [3, 5]; // shown as "Estimated Oct 13-15"
+export const DELIVERY_DAYS = [1, 2]; // shown as "Estimated Oct 13-14": a day to prepare and ship, then Lalamove delivers the same day
 export const STORE_ADDRESS = 'General Luna cor. Muralla St, Intramuros, Manila, 1002 Metro Manila';
 export const STORE_LOCATION: [number, number] = [14.58689, 120.97636]; // lat, lng of STORE_ADDRESS, where deliveries start on the tracking map
 export const STORE_HOURS = 'Mon–Sat, 9AM–6PM';

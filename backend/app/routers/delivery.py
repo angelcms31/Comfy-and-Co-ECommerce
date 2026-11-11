@@ -38,9 +38,9 @@ def rider_order(db, order_num: str, token: str) -> dict:
     ).fetchall()
     order["max_attempts"] = MAX_DELIVERY_ATTEMPTS
     order["reasons"] = FAILED_ATTEMPT_REASONS
-    # what the rider collects at the door: the whole amount for COD, nothing when it was paid with GCash
+    # what the rider collects at the door: the whole amount for COD, nothing when it was paid by e-wallet
     paid = queries.payment_status(order["shipping_add"])[0] == "Paid"
-    order["collect_amt"] = 0 if order["payment_method"] == "GCash" and paid else order["total_amt"]
+    order["collect_amt"] = 0 if order["payment_method"] != "COD" and paid else order["total_amt"]
     # the plain address, without the "(Standard Delivery via ...)" and payment tags the backend adds to shipping_add
     order["address"] = order["shipping_add"].split(" (Standard Delivery via ")[0]
     del order["shipping_add"]

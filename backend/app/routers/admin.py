@@ -18,37 +18,35 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(requir
 
 # ---------- dashboard ----------
 
-def forecast(values: list[float], steps: int = 1) -> list[float]:
-    # straight line through the actual sales (least squares), continued `steps` periods. Never below zero.
-    n = len(values)
-    if n < 2:
-        return [round(values[0], 2) if values else 0.0] * steps
-    mean_x, mean_y = (n - 1) / 2, sum(values) / n
-    slope_den = sum((i - mean_x) ** 2 for i in range(n))
-    slope = sum((i - mean_x) * (v - mean_y) for i, v in enumerate(values)) / slope_den
-    return [max(0.0, round(mean_y + slope * (n + k - mean_x), 2)) for k in range(steps)]
-
-
 def add_months(d: date, n: int) -> date:
     # first day of the month n months away from d
     m = d.year * 12 + d.month - 1 + n
     return date(m // 12, m % 12 + 1, 1)
 
 
-# range -> (past months shown, months forecast)
-MONTH_RANGES = {"12m": (12, 6), "24m": (24, 12)}
+# range -> past months shown
+MONTH_RANGES = {"12m": 12, "24m": 24}
+
+# Actual sales are orders that left the store (Shipped or Delivered). Pending orders aren't sales yet: their total is the
+# forecast, the money that comes in once they ship. Cancelled and Returned orders count for neither.
+SOLD = "order_stat in ('Shipped', 'Delivered')"
 
 
-def daily_chart(db, period: str, day: date) -> tuple[list[dict], float]:
+def pending_forecast(db) -> dict:
+    row = db.execute("""select coalesce(sum(total_amt), 0) as total, count(*) as orders from "order" where order_stat = 'Pending'""").fetchone()
+    return {"total": float(row["total"]), "orders": row["orders"]}
+
+
+def daily_chart(db, period: str, day: date, pending: dict) -> list[dict]:
     days = 7 if period == "7d" else 28
     start = day - timedelta(days=days - 1)
 
-    # sales per day in PH time, cancelled orders don't count
+    # sales per day in PH time
     rows = db.execute(
-        """
+        f"""
         select (placed_at at time zone %s)::date as day, sum(total_amt) as total
         from "order"
-        where order_stat not in ('Cancelled', 'Returned') and (placed_at at time zone %s)::date between %s and %s
+        where {SOLD} and (placed_at at time zone %s)::date between %s and %s
         group by 1
         """,
         (TIMEZONE, TIMEZONE, start, day),
@@ -61,61 +59,52 @@ def daily_chart(db, period: str, day: date) -> tuple[list[dict], float]:
         actual = daily
         next_label = (day + timedelta(days=1)).strftime("%a")
     else:
-        # 4 weeks ending today, then the forecast for week 5
+        # 4 weeks ending today, then week 5
         labels = [f"Week {w + 1}" for w in range(4)]
         actual = [sum(daily[w * 7 : w * 7 + 7]) for w in range(4)]
         next_label = "Week 5"
 
     chart = [{"label": label, "total": total, "forecast": False} for label, total in zip(labels, actual)]
-    chart.append({"label": next_label, "total": forecast(actual)[0], "forecast": True})
-    return chart, by_day.get(day, 0)
+    chart.append({"label": next_label, "total": pending["total"], "forecast": True, "orders": pending["orders"]})
+    return chart
 
 
-def monthly_chart(db, period: str, day: date) -> list[dict]:
-    past, ahead = MONTH_RANGES[period]
+def monthly_chart(db, period: str, day: date, pending: dict) -> list[dict]:
+    past = MONTH_RANGES[period]
     this_month = day.replace(day=1)
     start = add_months(this_month, -(past - 1))
 
     rows = db.execute(
-        """
+        f"""
         select date_trunc('month', placed_at at time zone %s)::date as month, sum(total_amt) as total
         from "order"
-        where order_stat not in ('Cancelled', 'Returned') and (placed_at at time zone %s)::date >= %s
+        where {SOLD} and (placed_at at time zone %s)::date >= %s
         group by 1
         """,
         (TIMEZONE, TIMEZONE, start),
     ).fetchall()
     by_month = {r["month"]: float(r["total"]) for r in rows}
     months = [add_months(start, i) for i in range(past)]
-    actual = [by_month.get(m, 0.0) for m in months]
-
-    # fit the trend on finished months only (this month is still running), and skip the
-    # empty months before the first sale so they don't drag the line down
-    done = actual[:-1]
-    first = next((i for i, v in enumerate(done) if v), len(done))
-    fit = done[first:]
-    # this month gets a forecast too, so the line continues from the last finished month
-    projected = forecast(fit, ahead + 1)
 
     label = lambda m: m.strftime("%b '%y")
-    chart = [{"label": label(m), "total": v, "forecast": False} for m, v in zip(months, actual)]
-    chart[-1]["partial"] = True
-    chart[-1]["expected"] = projected[0]
-    chart += [
-        {"label": label(add_months(this_month, k + 1)), "total": v, "forecast": True}
-        for k, v in enumerate(projected[1:])
-    ]
+    chart = [{"label": label(m), "total": by_month.get(m, 0.0), "forecast": False} for m in months]
+    chart[-1]["partial"] = True  # this month so far
+    chart.append({"label": label(add_months(this_month, 1)), "total": pending["total"], "forecast": True, "orders": pending["orders"]})
     return chart
 
 
 @router.get("/dashboard")
 def dashboard(db: Db, period: Literal["7d", "30d", "12m", "24m"] = Query("7d", alias="range")):
     day = today()
-    if period in MONTH_RANGES:
-        chart = monthly_chart(db, period, day)
-        _, sales_today = daily_chart(db, "7d", day)
-    else:
-        chart, sales_today = daily_chart(db, period, day)
+    pending = pending_forecast(db)
+    chart = monthly_chart(db, period, day, pending) if period in MONTH_RANGES else daily_chart(db, period, day, pending)
+    # every order placed today that wasn't cancelled or returned, the same as before the forecast change
+    sales_today = float(
+        db.execute(
+            """select coalesce(sum(total_amt), 0) from "order" where order_stat not in ('Cancelled', 'Returned') and (placed_at at time zone %s)::date = %s""",
+            (TIMEZONE, day),
+        ).fetchone()["coalesce"]
+    )
 
     counts = db.execute(
         """
@@ -328,8 +317,8 @@ def make_receipt(db: Db, request: Request, order_id: int, user=Depends(require_a
         raise HTTPException(400, "This is a store pickup order, there is nothing to deliver")
     if order["order_stat"] not in ("Pending", "Shipped"):
         raise HTTPException(400, f"A {order['order_stat'].lower()} order has no delivery receipt")
-    if order["payment_method"] == "GCash" and queries.payment_status(order["shipping_add"])[0] != "Paid":
-        raise HTTPException(400, "Confirm the GCash payment before making the delivery receipt")
+    if order["payment_method"] != "COD" and queries.payment_status(order["shipping_add"])[0] != "Paid":
+        raise HTTPException(400, "Confirm the e-wallet payment before making the delivery receipt")
     if not order["delivery_token"]:
         db.execute('update "order" set delivery_token = %s where order_id = %s', (delivery.new_token(), order_id))
         audit.log(db, request, user, f"Made the delivery receipt (QR) for order #{order['order_num']}")
@@ -352,10 +341,10 @@ def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, 
     if (
         order["order_stat"] == "Pending"
         and body.order_stat in ("Shipped", "Delivered")
-        and order["payment_method"] == "GCash"
+        and order["payment_method"] != "COD"
         and queries.payment_status(order["shipping_add"])[0] != "Paid"
     ):
-        raise HTTPException(400, "Confirm the GCash payment before shipping this order")
+        raise HTTPException(400, "Confirm the e-wallet payment before shipping this order")
 
     if body.order_stat in ("Cancelled", "Returned") and order["order_stat"] != body.order_stat:
         # put the stock back
@@ -376,7 +365,7 @@ def update_status(db: Db, request: Request, order_id: int, body: OrderStatusIn, 
     return queries.order_or_404(db, order_id)
 
 
-# an admin checks the reference number in the store's GCash app, the site can't see GCash
+# an admin checks the reference number in the store's e-wallet app, the site can't see the payment
 @router.patch("/orders/{order_id}/payment")
 def decide_gcash(db: Db, request: Request, order_id: int, body: GcashDecisionIn, user=Depends(require_admin)):
     order = db.execute('select order_stat, order_num, shipping_add from "order" where order_id = %s for update', (order_id,)).fetchone()
@@ -385,9 +374,10 @@ def decide_gcash(db: Db, request: Request, order_id: int, body: GcashDecisionIn,
     status, reference = queries.payment_status(order["shipping_add"])
     if status != "For verification" or order["order_stat"] != "Pending":
         raise HTTPException(400, "This order has no payment waiting to be checked")
-    queries.set_gcash_tag(db, order_id, "paid" if body.decision == "confirm" else "rejected", reference)
+    wallet = queries.payment_wallet(order["shipping_add"]) or "GCash"
+    queries.set_gcash_tag(db, order_id, "paid" if body.decision == "confirm" else "rejected", reference, wallet)
     verb = "Confirmed" if body.decision == "confirm" else "Rejected"
-    audit.log(db, request, user, f"{verb} GCash payment: #{order['order_num']} (ref {reference})")
+    audit.log(db, request, user, f"{verb} {wallet} payment: #{order['order_num']} (ref {reference})")
     events.notify(db, order_id, "payment")
     return queries.order_or_404(db, order_id)
 

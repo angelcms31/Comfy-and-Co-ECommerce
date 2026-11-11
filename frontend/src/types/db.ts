@@ -162,6 +162,7 @@ export interface Order {
   _temp_note?: string | null;
   _temp_payment_status?: PaymentStatus;
   _temp_payment_ref?: string | null;
+  _temp_payment_wallet?: 'GCash' | 'Maya' | 'MariBank' | null; // the e-wallet the reference number came from
 }
 
 export interface OrderItem {

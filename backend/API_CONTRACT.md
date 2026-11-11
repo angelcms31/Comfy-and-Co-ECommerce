@@ -121,13 +121,13 @@ Each user has one `wishlist_col`. Create it on the first add. All return `Wishli
 | POST | `/orders/{order_id}/delivery-feedback` | `{ received, details? }` | `OrderWithItems`; after the rider marked it `Delivered`: `received: true` sets `receipt_confirmed_at`, `false` needs `details` and sets `not_received_report` / `not_received_at` (shown to admins on the order) |
 | POST | `/orders/{order_id}/refund` | `{ reason, details?, photos[] }` | `OrderWithItems`; only a `Delivered` order, within `REFUND_DAYS` (3) of `delivered_at` (400 after that), one request per order, a photo is required unless the reason is `Other` |
 | POST | `/orders/uploads` | image file | `{ url }`; a refund photo, up to 5 MB (any logged in customer) |
-| POST | `/orders/{order_id}/gcash/confirm` | `{ reference }` (13 digits) | `OrderWithItems`; the order's owner sends the reference number after scanning the store's QR, only while `Pending`. `_temp_payment_status` becomes `For verification` (SCHEMA_GAPS #2) |
+| POST | `/orders/{order_id}/gcash/confirm` | `{ reference, wallet? }`: `wallet` is `GCash` (default, reference = 13 digits), `Maya` or `MariBank` (6 to 30 letters and digits) | `OrderWithItems` with `_temp_payment_wallet`; the order's owner sends the reference number after scanning the store's QR, only while `Pending`. `_temp_payment_status` becomes `For verification` (SCHEMA_GAPS #2) |
 
 ```jsonc
 // PlaceOrderInput
 {
   "lines": [{ "prod_var_id": 19, "quantity": 1 }],
-  "payment_method": "GCash",                 // or "COD"
+  "payment_method": "GCash",                 // or "COD". "GCash" means any e-wallet, see _temp_payment_wallet
   "customer": { "full_name": "...", "mobile_no": "...", "st_add": "...", "postal": "1600", "city_id": 4 },
   "note": "Please call before delivery",
   "fulfillment": "delivery",                 // or "pickup"; delivery adds DELIVERY_FEE (₱100) to total_amt
@@ -175,7 +175,7 @@ Every change below is written to `audit_log` (who, what, IP, device).
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
-| GET | `/admin/dashboard` | `range` (`7d` / `30d` / `12m` / `24m`) | `DashboardSummary`; `chart` ends with forecast points: 1 day / 1 week, or 6 / 12 months for the monthly ranges. `mostLiked`: top 5 products by how many customers saved them to their Likes (`product_id, product_name, likes, images`) |
+| GET | `/admin/dashboard` | `range` (`7d` / `30d` / `12m` / `24m`) | `DashboardSummary`; `chart` is the actual sales (Shipped + Delivered orders) per day / week / month, then one forecast point for the next day / week / month: the total of all `Pending` orders (`orders` = how many). `mostLiked`: top 5 products by how many customers saved them to their Likes (`product_id, product_name, likes, images`) |
 | POST | `/admin/products` | `ProductInput` | `ProductWithVariants` |
 | PUT | `/admin/products/{product_id}` | `ProductInput` | `ProductWithVariants` |
 | PATCH | `/admin/products/{product_id}/archive` | `{ archived }` | `ProductWithVariants`; archived = `is_avail` false, hidden from the store |
@@ -250,7 +250,7 @@ The access token goes in the query string (`?token=`), since browsers can't set 
 
 // DashboardSummary (days are Asia/Manila, cancelled orders not counted in sales)
 { "salesToday": 23200, "ordersToday": 3, "lowStockCount": 9, "avgRating": 4.5, "reviewCount": 12,
-  // 7d: one bar per day + tomorrow's forecast; 30d: 4 weeks + week 5 forecast (straight-line trend)
+  // 7d: one bar per day + tomorrow's forecast; 30d: 4 weeks + week 5 forecast. The forecast is the pending orders' total
   "chart": [{ "label": "Mon", "total": 27900, "forecast": false }, { "label": "Tue", "total": 31000, "forecast": true }],
   "recentOrders": [ /* OrderWithItems, latest 6 */ ] }
 

@@ -24,7 +24,8 @@ def shipping(db, user):
     text = (
         f"We deliver through {COURIER}. The fee depends on how far you are from our store in Intramuros and the vehicle "
         "your items need (a motorcycle for small items, a van or truck for furniture); you'll see the exact amount at checkout "
-        "before you place the order. Store pickup is free. Orders usually arrive 3–5 days after they ship."
+        "before you place the order. Store pickup is free. Orders usually arrive 1–2 days after you place them: "
+        f"once an order ships, {COURIER} delivers it the same day."
     )
     if free:
         text += f" Delivery is free on orders of {peso(free)} or more."
@@ -33,8 +34,9 @@ def shipping(db, user):
 
 def payment(db, user):
     return (
-        "We accept GCash and Cash on Delivery. For GCash, scan our QR code after checkout and enter the reference number "
-        "so we can check the payment. For COD, please prepare the exact amount when your order arrives."
+        "We accept e-wallets (GCash, Maya and MariBank) and Cash on Delivery. For an e-wallet, scan our QR code "
+        "after checkout with your app and enter the reference number so we can check the payment. "
+        "For COD, please prepare the exact amount when your order arrives."
     )
 
 
@@ -55,8 +57,8 @@ def order_status(db, user):
         return "You don't have any orders yet. Once you check out, you can follow them in Track order."
     o = orders[0]
     text = f"Your latest order #{o['order_num']} ({peso(o['total_amt'])}) {STATUS_TEXT.get(o['order_stat'], 'is ' + o['order_stat'])}."
-    if o.get("_temp_payment_status"):
-        text += f" GCash payment: {o['_temp_payment_status']}."
+    if o["payment_method"] != "COD" and o.get("_temp_payment_status"):
+        text += f" {o.get('_temp_payment_wallet') or 'E-wallet'} payment: {o['_temp_payment_status']}."
     if len(orders) > 1:
         text += f" You have {len(orders)} orders in total, all listed in Track order."
     return text
@@ -65,7 +67,7 @@ def order_status(db, user):
 def cancel(db, user):
     return (
         "You can cancel an order yourself from Track order while it hasn't shipped yet. "
-        "If you already paid with GCash, tap “Talk to staff” so we can cancel it and return your payment."
+        "If you already paid by e-wallet, tap “Talk to staff” so we can cancel it and return your payment."
     )
 
 

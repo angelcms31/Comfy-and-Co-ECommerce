@@ -30,7 +30,7 @@ export default function ReceiptPage() {
   const [tokenError, setTokenError] = useState<string | null>(null);
   const toast = useToast();
 
-  // step 1: the QR token, made once for a Pending delivery order (refused e.g. while a GCash payment is unconfirmed)
+  // step 1: the QR token, made once for a Pending delivery order (refused e.g. while an e-wallet payment is unconfirmed)
   const needsToken = !!order && order.order_stat === 'Pending' && !order.delivery_token && !parseShipping(order.shipping_add).pickup;
   useEffect(() => {
     if (!needsToken) return;
@@ -186,7 +186,7 @@ export default function ReceiptPage() {
 
             <section className={`rounded-xl border-2 p-3 ${cod ? 'border-ink' : 'border-line'}`}>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">{cod ? 'Collect from customer' : 'Nothing to collect'}</p>
-              <p className="text-2xl font-bold">{cod ? formatPeso(order.total_amt) : 'PAID via GCash'}</p>
+              <p className="text-2xl font-bold">{cod ? formatPeso(order.total_amt) : `PAID via ${order._temp_payment_wallet ?? 'e-wallet'}`}</p>
             </section>
           </div>
 

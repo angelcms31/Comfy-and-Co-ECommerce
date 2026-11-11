@@ -1,34 +1,40 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, ChevronLeft, Clock, Download, Info, Smartphone } from 'lucide-react';
 import Button, { ButtonLink } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { ErrorState, LoadingState } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { useAsync } from '@/hooks/useAsync';
-import { GCASH_ACCOUNT_NAME, GCASH_QR_IMAGE } from '@/lib/constants';
+import WalletPicker from '@/components/order/WalletPicker';
+import { EWALLET_INFO, GCASH_ACCOUNT_NAME, GCASH_QR_IMAGE, isEwallet, referenceRule, type Ewallet } from '@/lib/constants';
 import { formatPeso } from '@/lib/pricing';
 import { canPayGcash } from '@/lib/tracking';
 import { orderService } from '@/services/orderService';
 import NotFound from '../NotFound';
 
-const REFERENCE_LENGTH = 13;
-
-// The customer pays by scanning the store's GCash QR, then sends the reference number here. The site can't see GCash,
-// so an admin checks the reference in the GCash app before the order counts as paid.
+// The customer pays by scanning the store's QR for their e-wallet (GCash, Maya or MariBank),
+// then sends the reference number here. The site can't see the payment, so an admin checks the reference in the store's
+// GCash app before the order counts as paid. The wallet comes from checkout (?wallet=) and can be changed here.
 export default function GcashPaymentPage() {
   const orderId = Number(useParams().orderId);
+  const [params] = useSearchParams();
+  const fromUrl = params.get('wallet');
+  const [wallet, setWallet] = useState<Ewallet>(isEwallet(fromUrl) ? fromUrl : 'GCash');
+  const rule = referenceRule(wallet);
   const toast = useToast();
   const { data: order, loading, error, reload, setData } = useAsync(() => orderService.getById(orderId), [orderId]);
   const [reference, setReference] = useState('');
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [qrMissing, setQrMissing] = useState(false);
+  const [qrFallback, setQrFallback] = useState(false); // this wallet's own QR isn't uploaded yet: show the GCash (QR Ph) one
+  const qr = qrFallback ? GCASH_QR_IMAGE : EWALLET_INFO[wallet].qr;
 
   if (!Number.isInteger(orderId)) return <NotFound />;
   if (loading && !order) return <div className="container-page max-w-lg py-8"><LoadingState label="Loading your order..." layout="detail" /></div>;
   if (error) return error.toLowerCase().includes('not found') ? <NotFound /> : <ErrorState message={error} onRetry={reload} />;
-  if (!order || order.payment_method !== 'GCash') return <NotFound />;
+  if (!order || order.payment_method !== 'GCash') return <NotFound />; // 'GCash' = any e-wallet
 
   const orderLink = `/orders/${order.order_id}`;
   const status = order._temp_payment_status;
@@ -37,14 +43,14 @@ export default function GcashPaymentPage() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (reference.length !== REFERENCE_LENGTH) {
-      setReferenceError(`The reference number has ${REFERENCE_LENGTH} digits`);
+    if (reference.length < rule.min || reference.length > rule.max) {
+      setReferenceError(rule.min === rule.max ? `A ${wallet} reference number has ${rule.min} digits` : `Type the whole reference number from your ${wallet} receipt`);
       return;
     }
     setReferenceError(null);
     setSending(true);
     try {
-      setData(await orderService.confirmGcash(order.order_id, reference));
+      setData(await orderService.confirmGcash(order.order_id, reference, wallet));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not send your reference number');
     } finally {
@@ -105,7 +111,7 @@ export default function GcashPaymentPage() {
   } else if (!canPayGcash(order)) {
     content = (
       <>
-        <h1 className="text-3xl font-semibold text-forest">Pay with GCash</h1>
+        <h1 className="text-3xl font-semibold text-forest">Pay with e-wallet</h1>
         <p className="mt-3 text-sm text-muted">This order is {order.order_stat.toLowerCase()}, so it can't be paid anymore.</p>
         {leaveButtons}
       </>
@@ -117,8 +123,20 @@ export default function GcashPaymentPage() {
           <span className="grid size-12 shrink-0 place-items-center rounded-full bg-mint text-forest">
             <Smartphone className="size-6" />
           </span>
-          <h1 className="text-3xl font-semibold text-forest">Pay with GCash</h1>
+          <h1 className="text-3xl font-semibold text-forest">Pay with {wallet}</h1>
         </div>
+
+        <WalletPicker
+          className="mt-4"
+          value={wallet}
+          onChange={(w) => {
+            setWallet(w);
+            setReference('');
+            setReferenceError(null);
+            setQrFallback(false);
+            setQrMissing(false);
+          }}
+        />
 
         {status === 'Rejected' && (
           <p role="alert" className="mt-5 flex gap-2 rounded-xl bg-cancelled p-3 text-sm text-cancelled-text">
@@ -131,7 +149,7 @@ export default function GcashPaymentPage() {
 
         {qrMissing ? (
           <p role="alert" className="mt-5 rounded-xl bg-butter/50 p-4 text-center text-sm text-ink">
-            Our GCash QR code isn't available right now. Please don't send any payment yet, and{' '}
+            Our QR code isn't available right now. Please don't send any payment yet, and{' '}
             <Link to={`/contact?order=${order.order_num}`} className="font-medium text-forest underline">
               contact us
             </Link>{' '}
@@ -141,32 +159,33 @@ export default function GcashPaymentPage() {
           <>
             <div className="mt-5 text-center">
               <img
-                src={GCASH_QR_IMAGE}
-                alt={`GCash QR code for ${GCASH_ACCOUNT_NAME}`}
-                onError={() => setQrMissing(true)}
+                key={qr}
+                src={qr}
+                alt={`${wallet} QR code for ${GCASH_ACCOUNT_NAME}`}
+                onError={() => (qr === GCASH_QR_IMAGE ? setQrMissing(true) : setQrFallback(true))}
                 className="mx-auto size-64 rounded-xl border border-line object-contain"
               />
-              <a href={GCASH_QR_IMAGE} download="comfyco-gcash-qr" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-forest hover:underline">
+              <a href={qr} download={`comfyco-${wallet.toLowerCase()}-qr`} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-forest hover:underline">
                 <Download className="size-4" /> Save QR code
               </a>
             </div>
 
             <ol className="mt-5 list-decimal space-y-1 pl-5 text-sm text-ink">
-              <li>Open your GCash app and scan this QR, or upload the saved photo.</li>
+              <li>Open your {wallet} app and scan this QR, or upload the saved photo.</li>
               <li>
                 Pay exactly <span className="font-semibold">{formatPeso(order.total_amt)}</span>.
               </li>
-              <li>Type the reference number from your GCash receipt below.</li>
+              <li>Type the reference number from your {wallet} receipt below.</li>
             </ol>
 
             <form onSubmit={submit} noValidate className="mt-5 space-y-3">
               <Input
-                label="GCash reference number"
-                inputMode="numeric"
+                label={`${wallet} reference number`}
+                inputMode={rule.digitsOnly ? 'numeric' : 'text'}
                 autoComplete="off"
-                placeholder={`${REFERENCE_LENGTH} digits`}
+                placeholder={rule.digitsOnly ? `${rule.min} digits` : 'Letters and numbers'}
                 value={reference}
-                onChange={(e) => setReference(e.target.value.replace(/\D/g, '').slice(0, REFERENCE_LENGTH))}
+                onChange={(e) => setReference(e.target.value.replace(rule.digitsOnly ? /\D/g : /[^A-Za-z0-9]/g, '').toUpperCase().slice(0, rule.max))}
                 error={referenceError}
               />
               <Button type="submit" size="lg" className="w-full" loading={sending}>
@@ -179,7 +198,7 @@ export default function GcashPaymentPage() {
         <ButtonLink to={orderLink} variant="outline" size="lg" className="mt-3 w-full">
           Pay later
         </ButtonLink>
-        <p className="mt-4 text-center text-xs text-muted">We will never ask for your GCash MPIN or OTP.</p>
+        <p className="mt-4 text-center text-xs text-muted">We will never ask for your MPIN, password or OTP.</p>
       </>
     );
   }

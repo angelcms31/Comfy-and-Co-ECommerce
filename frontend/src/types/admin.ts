@@ -11,9 +11,9 @@ export interface DashboardSummary {
   lowStockCount: number;
   avgRating: number;
   reviewCount: number;
-  // actual bars, then the forecast bars (straight-line trend of the actual bars).
-  // monthly ranges: the current month is `partial` (month to date) and `expected` is the trend's figure for it
-  chart: { label: string; total: number; forecast: boolean; partial?: boolean; expected?: number }[];
+  // actual bars (Shipped + Delivered orders), then one forecast bar: the total of the Pending orders (`orders` of them).
+  // monthly ranges: the current month is `partial` (month to date)
+  chart: { label: string; total: number; forecast: boolean; partial?: boolean; orders?: number }[];
   recentOrders: OrderWithItems[];
   // top 5 products by how many customers saved them to their Likes
   mostLiked: { product_id: number; product_name: string; likes: number; images: string | null }[];

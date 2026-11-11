@@ -275,7 +275,8 @@ function OrderDetails({
         {order._temp_payment_status === 'For verification' && order.order_stat === 'Pending' && (
           <div className="rounded-xl bg-pending p-3 text-pending-text">
             <p className="font-medium">
-              Check the store's GCash app for reference no. {order._temp_payment_ref} and {formatPeso(order.total_amt)}.
+              Paid with {order._temp_payment_wallet ?? 'GCash'}: check the store's GCash app for reference no. {order._temp_payment_ref} and{' '}
+              {formatPeso(order.total_amt)}.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button size="sm" disabled={saving} onClick={() => onPayment(order, 'confirm')}>

@@ -211,7 +211,7 @@ export default function DeliverPage() {
               </ul>
               <div className={`mt-3 rounded-xl p-3 ${order.collect_amt ? 'bg-butter-light' : 'bg-mint-light'}`}>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted">{order.collect_amt ? 'Collect cash' : 'Already paid'}</p>
-                <p className="text-2xl font-bold text-ink">{order.collect_amt ? formatPeso(order.collect_amt) : 'GCash, nothing to collect'}</p>
+                <p className="text-2xl font-bold text-ink">{order.collect_amt ? formatPeso(order.collect_amt) : 'Paid by e-wallet, nothing to collect'}</p>
               </div>
             </section>
 

@@ -12,7 +12,7 @@ const shortPeso = (n: number) =>
 
 function ChartTooltip({ active, payload }: { active?: boolean; payload?: { payload: Point }[] }) {
   if (!active || !payload?.length) return null;
-  const { label, total, forecast, partial, expected } = payload[0].payload;
+  const { label, total, forecast, partial, orders } = payload[0].payload;
   return (
     <div className="rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-md">
       <p className="text-muted">
@@ -21,7 +21,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
         {partial && ' (so far)'}
       </p>
       <p className="mt-0.5 font-semibold text-ink">{formatPeso(total)}</p>
-      {partial && expected !== undefined && <p className="mt-0.5 text-muted">Trend for the full month: {formatPeso(expected)}</p>}
+      {forecast && <p className="mt-0.5 text-muted">From {orders ?? 0} pending {orders === 1 ? 'order' : 'orders'} not shipped yet</p>}
     </div>
   );
 }
@@ -33,7 +33,7 @@ export function ChartLegend() {
         <span className="size-3 rounded-sm bg-forest" /> Actual Sales
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="size-3 rounded-sm bg-mint" /> Forecasted Sales
+        <span className="size-3 rounded-sm bg-mint" /> Forecasted Sales (pending orders)
       </span>
     </div>
   );
@@ -76,31 +76,30 @@ export default function SalesChart({ data = [] }: { data?: Point[] }) {
 
 const UNIT: Record<string, [string, string]> = { day: ['day', 'days'], week: ['week', 'weeks'], month: ['month', 'months'] };
 
-// one line under the chart: what the forecast adds up to, compared with the same stretch of actual sales just before it
+// one line under the chart: the forecast (all Pending orders) next to the last finished stretch of actual sales
 export function ForecastSummary({ data = [], unit }: { data?: Point[]; unit: 'day' | 'week' | 'month' }) {
-  const ahead = data.filter((d) => d.forecast);
+  const ahead = data.find((d) => d.forecast);
   // the running month isn't finished, so it's left out of the comparison
-  const past = data.filter((d) => !d.forecast && !d.partial).slice(-ahead.length);
-  if (!ahead.length || !past.length) return null;
+  const last = data.filter((d) => !d.forecast && !d.partial).at(-1);
+  if (!ahead) return null;
 
-  const projected = ahead.reduce((s, d) => s + d.total, 0);
-  const before = past.reduce((s, d) => s + d.total, 0);
-  const change = before ? ((projected - before) / before) * 100 : null;
-  const [one, many] = UNIT[unit];
-  const span = ahead.length === 1 ? `next ${one}` : `next ${ahead.length} ${many}`;
-  const prev = past.length === 1 ? `the last ${one}` : `the last ${past.length} ${many}`;
+  const change = last?.total ? ((ahead.total - last.total) / last.total) * 100 : null;
+  const [one] = UNIT[unit];
+  const orders = ahead.orders ?? 0;
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-cream px-3 py-2 text-sm">
       <span className="text-muted">
-        Forecast for the {span}: <span className="font-semibold text-forest">{formatPeso(projected)}</span>
+        Forecast for the next {one}: <span className="font-semibold text-forest">{formatPeso(ahead.total)}</span>
       </span>
       {change !== null && (
         <span className={change >= 0 ? 'font-medium text-forest' : 'font-medium text-coral-dark'}>
-          {change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(0)}% vs {prev}
+          {change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(0)}% vs the last {one}
         </span>
       )}
-      <span className="text-xs text-muted">Based on the sales trend so far, a guide, not a promise.</span>
+      <span className="text-xs text-muted">
+        The total of {orders} pending {orders === 1 ? 'order' : 'orders'} not shipped yet. Actual sales count shipped and delivered orders.
+      </span>
     </div>
   );
 }

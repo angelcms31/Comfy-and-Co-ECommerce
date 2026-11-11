@@ -85,7 +85,7 @@ export interface RiderOrder {
   order_stat: OrderStat;
   payment_method: PaymentMethod;
   total_amt: number;
-  collect_amt: number; // cash to collect at the door (0 when paid with GCash)
+  collect_amt: number; // cash to collect at the door (0 when paid by e-wallet)
   address: string;
   vehicle: string | null;
   trips: number;

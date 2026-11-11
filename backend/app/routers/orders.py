@@ -170,7 +170,7 @@ def cancel_order(db: Db, order_id: int, body: CancelOrderIn, user=Depends(curren
     if order["order_stat"] != "Pending":
         raise HTTPException(400, "Only orders that haven't shipped yet can be cancelled")
     if order["_temp_payment_status"] in ("Paid", "For verification"):
-        raise HTTPException(400, "This order has a GCash payment, please contact us to cancel it")
+        raise HTTPException(400, "This order has an e-wallet payment, please contact us to cancel it")
     db.execute(
         """
         update prod_var v set stocks = v.stocks + oi.quantity
@@ -254,12 +254,15 @@ def request_refund(db: Db, order_id: int, body: RefundIn, user=Depends(current_u
 
 @router.post("/{order_id}/gcash/confirm")
 def confirm_gcash(db: Db, order_id: int, body: GcashPaymentIn, user=Depends(current_user)):
-    # the customer paid by scanning the store's QR and sends the reference number, an admin then checks it in the GCash app
+    # the customer paid by scanning the store's QR with their e-wallet and sends the reference number,
+    # an admin then checks it in the store's app
     order = own_order(db, user, order_id)
     if order["user_id"] != user["user_id"]:
         raise HTTPException(404, "Order not found")
-    if order["payment_method"] != "GCash":
-        raise HTTPException(400, "This order is not paid with GCash")
+    if order["payment_method"] == "COD":
+        raise HTTPException(400, "This order is paid in cash")
+    if body.wallet == "GCash" and not (len(body.reference) == 13 and body.reference.isdigit()):
+        raise HTTPException(400, "A GCash reference number has 13 digits")
     if order["_temp_payment_status"] in ("Paid", "For verification"):
         if order["_temp_payment_ref"] == body.reference:
             return customer_view(order)
@@ -268,10 +271,10 @@ def confirm_gcash(db: Db, order_id: int, body: GcashPaymentIn, user=Depends(curr
         raise HTTPException(400, "This order can't be paid anymore")
     used = db.execute(
         """select 1 from "order" where order_id <> %s and (shipping_add like %s or shipping_add like %s)""",
-        (order_id, f"%[GCash submitted, ref {body.reference}]%", f"%[GCash paid, ref {body.reference}]%"),
+        (order_id, f"% submitted, ref {body.reference}]%", f"% paid, ref {body.reference}]%"),
     ).fetchone()
     if used:
         raise HTTPException(400, "This reference number was already used for another order")
-    queries.set_gcash_tag(db, order_id, "submitted", body.reference)
+    queries.set_gcash_tag(db, order_id, "submitted", body.reference, body.wallet)
     events.notify(db, order_id, "payment")
     return customer_view(queries.order_or_404(db, order_id))
